@@ -30,9 +30,17 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
 
   String? _selectedDistrict;
   final List<String> _districts = [
-    'ເມືອງໄຊຍະບູລີ', 'ເມືອງຂອບ', 'ເມືອງຫົງສາ', 'ເມືອງເງິນ',
-    'ເມືອງຊຽງຮ່ອນ', 'ເມືອງພຽງ', 'ເມືອງປາກລາຍ', 'ເມືອງແກ່ນທ້າວ',
-    'ເມືອງບໍ່ແຕນ', 'ເມືອງທົ່ງມີໄຊ', 'ເມືອງໄຊສະຖານ'
+    'ເມືອງໄຊຍະບູລີ',
+    'ເມືອງຂອບ',
+    'ເມືອງຫົງສາ',
+    'ເມືອງເງິນ',
+    'ເມືອງຊຽງຮ່ອນ',
+    'ເມືອງພຽງ',
+    'ເມືອງປາກລາຍ',
+    'ເມືອງແກ່ນທ້າວ',
+    'ເມືອງບໍ່ແຕນ',
+    'ເມືອງທົ່ງມີໄຊ',
+    'ເມືອງໄຊສະຖານ'
   ];
 
   ll.LatLng? _pickedLocation;
@@ -182,14 +190,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
             style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
-        // ─── ✅ เพิ่มปุ่มกลับหน้า Home ตรงนี้ ───
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.home),
-            onPressed: () => Navigator.pop(context),
-            tooltip: 'ກັບໜ້າຫຼັກ',
-          ),
-        ],
       ),
       body: _isSaving
           ? Center(
@@ -332,12 +332,11 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                       ),
                       hint: const Text('ກະລຸນາເລືອກ ເມືອງ'),
                       items: _districts
-                          .map((d) =>
-                              DropdownMenuItem(value: d, child: Text(d)))
+                          .map(
+                              (d) => DropdownMenuItem(value: d, child: Text(d)))
                           .toList(),
                       onChanged: (v) => setState(() => _selectedDistrict = v),
-                      validator: (v) =>
-                          v == null ? 'ກະລຸນາເລືອກ ເມືອງ' : null,
+                      validator: (v) => v == null ? 'ກະລຸນາເລືອກ ເມືອງ' : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -368,7 +367,8 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                               color: Colors.teal, fontWeight: FontWeight.bold),
                         ),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.teal, width: 1.5),
+                          side:
+                              const BorderSide(color: Colors.teal, width: 1.5),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                         ),
@@ -432,7 +432,8 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                             ),
                             children: [
                               TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                urlTemplate:
+                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                 userAgentPackageName: 'com.example.abc_new',
                               ),
                               MarkerLayer(
@@ -465,8 +466,8 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                         ),
-                        icon: const Icon(Icons.cloud_upload,
-                            color: Colors.white),
+                        icon:
+                            const Icon(Icons.cloud_upload, color: Colors.white),
                         label: const Text(
                           'ບັນທຶກ ແລະ ອັບໂຫລດຮູບພາບ',
                           style: TextStyle(
@@ -477,25 +478,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // ─── ✅ เพิ่มปุ่มกลับหน้า Home ตรงนี้ (ด้านล่าง) ───
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back, color: Colors.teal),
-                        label: const Text(
-                          'ກັບໜ້າຫຼັກ',
-                          style: TextStyle(color: Colors.teal),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.teal),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 24),
                   ],
                 ),

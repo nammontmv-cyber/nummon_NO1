@@ -39,7 +39,8 @@ class Place {
   final List<String>? imageUrls;
   final double latitude;
   final double longitude;
-  final List<ExtraPlace>? extraPlaces;   // <-- เพิ่ม
+  final List<ExtraPlace>? extraPlaces;
+  final double imageAlignmentY; // <-- เพิ่มคุณสมบัตินี้รองรับแนวตั้ง
 
   Place({
     required this.id,
@@ -51,9 +52,9 @@ class Place {
     required this.latitude,
     required this.longitude,
     this.extraPlaces,
+    this.imageAlignmentY = 0.0, // <-- ค่าเริ่มต้นเป็น 0.0 (กึ่งกลาง)
   });
 
-  // factory fromMap (ใช้ในกรณีโหลดจาก Firestore)
   factory Place.fromMap(String id, Map<String, dynamic> map) {
     List<ExtraPlace>? extraList;
     if (map['extraPlaces'] != null) {
@@ -71,6 +72,7 @@ class Place {
       latitude: (map['latitude'] ?? 0.0).toDouble(),
       longitude: (map['longitude'] ?? 0.0).toDouble(),
       extraPlaces: extraList,
+      imageAlignmentY: (map['imageAlignmentY'] ?? 0.0).toDouble(), // <-- ดึงข้อมูลจากฐานข้อมูล
     );
   }
 
@@ -85,6 +87,7 @@ class Place {
       'latitude': latitude,
       'longitude': longitude,
       'extraPlaces': extraPlaces?.map((e) => e.toMap()).toList(),
+      'imageAlignmentY': imageAlignmentY, // <-- ส่งบันทึกขึ้น Firestore
     };
   }
 }

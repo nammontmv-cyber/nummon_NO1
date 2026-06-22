@@ -83,8 +83,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<String?> _uploadImage(File imageFile) async {
     try {
       const cloudName = "duo2b46ro";
-      const uploadPreset =
-          "travel_app_preset"; // ต้องเป็น Unsigned ใน Cloudinary
+      const uploadPreset = "travel_app_preset"; 
       final uri =
           Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/image/upload");
       final request = http.MultipartRequest("POST", uri);
@@ -171,12 +170,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
+  // 💡 ปรับปรุงฟังก์ชันการทำงานตรงส่วนนี้ให้ส่งค่าเด้งกลับเข้าหน้าจอบันทึกทันที
   Future<void> _pickAndCropImage(bool isProfile) async {
     try {
       final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-      if (image == null) return;
+      if (image == null) return; // ถ้าผู้ใช้กดยกเลิกการเลือกรูปภาพให้หยุดทำงาน
 
-      CroppedFile? croppedFile = await ImageCropper().cropImage(
+      // เรียกใช้งาน ImageCropper และตั้งค่าให้เด้งกลับเมื่อกดถูกต้อง
+      final croppedFile = await ImageCropper().cropImage(
         sourcePath: image.path,
         aspectRatio: isProfile
             ? const CropAspectRatio(ratioX: 1, ratioY: 1)
@@ -187,51 +188,44 @@ class _EditProfilePageState extends State<EditProfilePage> {
             toolbarColor: Colors.teal,
             toolbarWidgetColor: Colors.white,
             initAspectRatio: CropAspectRatioPreset.original,
-            lockAspectRatio: true,
+            lockAspectRatio: false, // 💡 ปรับเป็น false ชั่วคราวเพื่อให้ UI บน Android ยอมปล่อยผลลัพธ์กลับหน้าเดิมได้สะดวกขึ้น
+            hideBottomControls: false,
           ),
           IOSUiSettings(
             title: isProfile ? 'ຕັດຮູບໂປຣໄຟລ໌' : 'ຕັດຮູບພື້ນຫຼັງ',
+            doneButtonTitle: 'ຕົກລົງ',
+            cancelButtonTitle: 'ຍົກເລີກ',
           ),
         ],
       );
 
+      // เมื่อได้ไฟล์ที่ผ่านการตัด (กดปุ่ม ✓) และ Widget ยังแสดงผลอยู่บนหน้าจอ
       if (croppedFile != null && mounted) {
         setState(() {
           if (isProfile) {
-            _tempPhotoPath = croppedFile.path;
+            _tempPhotoPath = croppedFile.path; // บันทึกพาธรูปลงตัวแปรชั่วคราว
           } else {
             _tempCoverPath = croppedFile.path;
           }
         });
+        debugPrint('🟢 จัดตำแหน่งรูปภาพเสร็จสิ้น เด้งกลับมาที่หน้าบันทึกเรียบร้อย');
       }
     } catch (e) {
+      debugPrint('🔴 Crop Image Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text("ເກີດຂໍ້ຜິດພາດ: $e"), backgroundColor: Colors.red),
+              content: Text("ເກີດຂໍ້ຜິດພາດໃນການຕັດຮູບ: $e"), backgroundColor: Colors.red),
         );
       }
     }
   }
 
   Future<void> _saveProfile() async {
-    debugPrint('🟢 _saveProfile called');
-
-    // ตรวจสอบ Form
     final formState = _formKey.currentState;
-    if (formState == null) {
-      debugPrint('🔴 _formKey.currentState is null');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("ໜ້າຍັງໂຫຼດບໍ່ສຳເລັດ ກະລຸນາລໍຖ້າ ແລະ ລອງໃໝ່"),
-              backgroundColor: Colors.orange),
-        );
-      }
-      return;
-    }
+    if (formState == null) return;
+    
     if (!formState.validate()) {
-      debugPrint('🔴 form validation failed');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text("ກະລຸນາປ້ອນຊື່ສະແດງ"),
@@ -240,9 +234,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       return;
     }
 
-    debugPrint('🟢 validation passed, starting save...');
     setState(() => _isSaving = true);
-
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
@@ -260,37 +252,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
       String finalPhotoUrl = _photoUrl;
       String finalCoverUrl = _coverUrl;
 
-      // อัปโหลดรูปโปรไฟล์ (ถ้ามี)
       if (_tempPhotoPath != null) {
-        debugPrint('🟢 uploading profile photo...');
         final uploaded = await _uploadImage(File(_tempPhotoPath!));
         if (uploaded != null) {
           finalPhotoUrl = uploaded;
-          debugPrint('🟢 profile photo uploaded: $uploaded');
-          await user
-              .updatePhotoURL(uploaded)
-              .timeout(const Duration(seconds: 10));
+          await user.updatePhotoURL(uploaded).timeout(const Duration(seconds: 10));
         } else {
-          throw Exception(
-              "ອັບໂຫລດຮູບໂປຣໄຟລ໌ບໍ່ສຳເລັດ (ເກີນເວລາ ຫຼື ເຊີບເວີບໍ່ຕອບສະໜອງ)");
+          throw Exception("ອັບໂຫລດຮູບໂປຣໄຟລ໌ບໍ່ສຳເລັດ");
         }
       }
 
-      // อัปโหลดรูปปก (ถ้ามี)
       if (_tempCoverPath != null) {
-        debugPrint('🟢 uploading cover photo...');
         final uploaded = await _uploadImage(File(_tempCoverPath!));
         if (uploaded != null) {
           finalCoverUrl = uploaded;
-          debugPrint('🟢 cover photo uploaded: $uploaded');
         } else {
-          throw Exception(
-              "ອັບໂຫລດຮູບປົກບໍ່ສຳເລັດ (ເກີນເວລາ ຫຼື ເຊີບເວີບໍ່ຕອບສະໜອງ)");
+          throw Exception("ອັບໂຫລດຮູບປົກບໍ່ສຳເລັດ");
         }
       }
 
-      // บันทึก Firestore
-      debugPrint('🟢 writing to Firestore...');
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'displayName': _displayNameController.text.trim(),
         'bio': _bioController.text.trim(),
@@ -299,13 +279,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         'email': user.email,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
-      debugPrint('🟢 Firestore write done');
 
-      // อัปเดต displayName ใน Auth
-      await user
-          .updateDisplayName(_displayNameController.text.trim())
-          .timeout(const Duration(seconds: 10));
-      debugPrint('🟢 save complete');
+      await user.updateDisplayName(_displayNameController.text.trim()).timeout(const Duration(seconds: 10));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -313,21 +288,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
               content: Text("ອັບເດດໂປຣໄຟລ໌ສຳເລັດ!"),
               backgroundColor: Colors.green),
         );
-        Navigator.pop(context, true);
+        Navigator.pop(context, true); // ปิดหน้าบันทึกเมื่อบันทึกข้อมูลสำเร็จ
       }
-    } catch (e, stack) {
-      debugPrint('🔴 _saveProfile error: $e');
-      debugPrint('🔴 stack: $stack');
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text("ເກີດຂໍ້ຜິດພາດ: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("ເກີດຂໍ້ຜິດພາດ: $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -367,9 +337,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint(
-        '🔵 build called, _isSaving = $_isSaving, _isLoading = $_isLoading');
-
     return WillPopScope(
       onWillPop: () async => !_isSaving,
       child: Scaffold(
@@ -380,10 +347,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           actions: [
             IconButton(
               icon: const Icon(Icons.check),
-              onPressed: () {
-                print('🟢 AppBar save button tapped (PRINT)');
-                _saveProfile();
-              },
+              onPressed: _isSaving ? null : _saveProfile,
             ),
           ],
         ),
@@ -399,8 +363,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       GestureDetector(
                         onTap: () => _pickAndCropImage(false),
                         onLongPress: () {
-                          if (_coverUrl.isNotEmpty)
-                            _showImagePreview(_coverUrl);
+                          if (_coverUrl.isNotEmpty) _showImagePreview(_coverUrl);
                         },
                         child: Stack(
                           children: [
@@ -420,10 +383,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 color: Colors.grey[300],
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child:
-                                  (_coverUrl.isEmpty && _tempCoverPath == null)
-                                      ? const Icon(Icons.add_photo_alternate,
-                                          size: 40)
+                              child: (_coverUrl.isEmpty && _tempCoverPath == null)
+                                      ? const Icon(Icons.add_photo_alternate, size: 40)
                                       : null,
                             ),
                             if (_tempCoverPath != null)
@@ -431,15 +392,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 top: 8,
                                 left: 8,
                                 child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _tempCoverPath = null),
+                                  onTap: () => setState(() => _tempCoverPath = null),
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle),
-                                    child: const Icon(Icons.close,
-                                        color: Colors.white, size: 16),
+                                        color: Colors.red, shape: BoxShape.circle),
+                                    child: const Icon(Icons.close, color: Colors.white, size: 16),
                                   ),
                                 ),
                               ),
@@ -449,16 +407,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                    color: Colors.black54,
-                                    borderRadius: BorderRadius.circular(8)),
+                                    color: Colors.black54, borderRadius: BorderRadius.circular(8)),
                                 child: Row(
                                   children: const [
-                                    Icon(Icons.crop,
-                                        color: Colors.white, size: 16),
+                                    Icon(Icons.crop, color: Colors.white, size: 16),
                                     SizedBox(width: 4),
-                                    Text("ຕັດ",
-                                        style: TextStyle(
-                                            color: Colors.white, fontSize: 11)),
+                                    Text("ຕັດ", style: TextStyle(color: Colors.white, fontSize: 11)),
                                   ],
                                 ),
                               ),
@@ -472,18 +426,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                     Container(
                                       padding: const EdgeInsets.all(4),
                                       decoration: BoxDecoration(
-                                          color: Colors.black54,
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
+                                          color: Colors.black54, borderRadius: BorderRadius.circular(8)),
                                       child: const Row(
                                         children: [
-                                          Icon(Icons.visibility,
-                                              color: Colors.white, size: 14),
+                                          Icon(Icons.visibility, color: Colors.white, size: 14),
                                           SizedBox(width: 4),
-                                          Text("ເບິ່ງ",
-                                              style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 10)),
+                                          Text("ເບິ່ງ", style: TextStyle(color: Colors.white, fontSize: 10)),
                                         ],
                                       ),
                                     ),
@@ -493,28 +441,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                       child: Container(
                                         padding: const EdgeInsets.all(4),
                                         decoration: const BoxDecoration(
-                                            color: Colors.red,
-                                            shape: BoxShape.circle),
-                                        child: const Icon(Icons.delete,
-                                            color: Colors.white, size: 16),
+                                            color: Colors.red, shape: BoxShape.circle),
+                                        child: const Icon(Icons.delete, color: Colors.white, size: 16),
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            if (_tempCoverPath != null)
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: BorderRadius.circular(8)),
-                                  child: const Text("ເລືອກແລ້ວ",
-                                      style: TextStyle(
-                                          color: Colors.white, fontSize: 10)),
                                 ),
                               ),
                           ],
@@ -526,8 +457,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       GestureDetector(
                         onTap: () => _pickAndCropImage(true),
                         onLongPress: () {
-                          if (_photoUrl.isNotEmpty)
-                            _showImagePreview(_photoUrl);
+                          if (_photoUrl.isNotEmpty) _showImagePreview(_photoUrl);
                         },
                         child: Stack(
                           children: [
@@ -539,10 +469,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                   : (_photoUrl.isNotEmpty
                                       ? NetworkImage(_photoUrl)
                                       : null),
-                              child:
-                                  (_photoUrl.isEmpty && _tempPhotoPath == null)
-                                      ? const Icon(Icons.person,
-                                          size: 40, color: Colors.grey)
+                              child: (_photoUrl.isEmpty && _tempPhotoPath == null)
+                                      ? const Icon(Icons.person, size: 40, color: Colors.grey)
                                       : null,
                             ),
                             if (_tempPhotoPath != null)
@@ -550,15 +478,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 top: 0,
                                 left: 0,
                                 child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _tempPhotoPath = null),
+                                  onTap: () => setState(() => _tempPhotoPath = null),
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle),
-                                    child: const Icon(Icons.close,
-                                        color: Colors.white, size: 16),
+                                        color: Colors.red, shape: BoxShape.circle),
+                                    child: const Icon(Icons.close, color: Colors.white, size: 16),
                                   ),
                                 ),
                               ),
@@ -571,8 +496,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                   color: Colors.teal,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.crop,
-                                    color: Colors.white, size: 16),
+                                child: const Icon(Icons.crop, color: Colors.white, size: 16),
                               ),
                             ),
                             if (_photoUrl.isNotEmpty && _tempPhotoPath == null)
@@ -584,53 +508,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle),
-                                    child: const Icon(Icons.delete,
-                                        color: Colors.white, size: 16),
+                                        color: Colors.red, shape: BoxShape.circle),
+                                    child: const Icon(Icons.delete, color: Colors.white, size: 16),
                                   ),
                                 ),
                               ),
-                            if (_tempPhotoPath != null)
-                              Positioned(
-                                top: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: BorderRadius.circular(8)),
-                                  child: const Text("ໃໝ່",
-                                      style: TextStyle(
-                                          color: Colors.white, fontSize: 9)),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ─── คำแนะนำ ───
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline,
-                                color: Colors.blue.shade700),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                "ກົດທີ່ຮູບເພື່ອເລືອກ ແລະ ຕັດຮູບ\nກົດຄ້າງ (Long Press) ເພື່ອເບິ່ງຮູບ",
-                                style: TextStyle(
-                                    color: Colors.blue.shade700, fontSize: 12),
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -638,25 +520,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
                       TextFormField(
                         controller: _displayNameController,
-                        decoration:
-                            const InputDecoration(labelText: "ຊື່ສະແດງ *"),
-                        validator: (v) => v!.isEmpty ? "ກະລຸນາປ້ອນຊື່" : null,
+                        decoration: const InputDecoration(labelText: "ຊື່ສະແດງ *"),
+                        validator: (v) => v!.isEmpty ? "ກະລุนາປ້ອນຊື່" : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _bioController,
                         maxLines: 3,
-                        decoration:
-                            const InputDecoration(labelText: "ກ່ຽວກັບຂ້ອຍ"),
+                        decoration: const InputDecoration(labelText: "ກ່ຽວກັບຂ້ອຍ"),
                       ),
                       const SizedBox(height: 24),
                       ElevatedButton(
-                        onPressed: _isSaving
-                            ? null
-                            : () {
-                                debugPrint('🟢 bottom save button tapped');
-                                _saveProfile();
-                              },
+                        onPressed: _isSaving ? null : _saveProfile,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.teal,
                           foregroundColor: Colors.white,
@@ -668,10 +543,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 height: 20,
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2))
-                            : const Text("ບັນທຶກ",
-                                style: TextStyle(fontSize: 16)),
+                            : const Text("ບັນທຶກ", style: TextStyle(fontSize: 16)),
                       ),
-                      const SizedBox(height: 20),
                     ],
                   ),
                 ),

@@ -43,7 +43,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // ─── ฟังก์ชันแสดงรูปภาพใหญ่ (Preview) ───
+  // ─── ฟังก์ชันแสดงรูปภาพใหญ่ทั่วไป (หน้าปก/โปรไฟล์) ───
   void _showImagePreview(String imageUrl, {String? title}) {
     showDialog(
       context: context,
@@ -63,47 +63,22 @@ class _ProfilePageState extends State<ProfilePage> {
                   height: MediaQuery.of(context).size.height * 0.8,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
-                    return Container(
-                      width: MediaQuery.of(context).size.width * 0.9,
-                      height: MediaQuery.of(context).size.height * 0.7,
-                      color: Colors.black,
-                      child: const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      ),
-                    );
+                    return const Center(child: CircularProgressIndicator(color: Colors.white));
                   },
                   errorBuilder: (c, e, s) => Container(
-                    width: 200,
-                    height: 200,
-                    color: Colors.grey[800],
+                    width: 200, height: 200, color: Colors.grey[800],
                     child: const Icon(Icons.broken_image, color: Colors.white, size: 50),
                   ),
                 ),
               ),
             ),
             Positioned(
-              top: 40,
-              right: 20,
+              top: 40, right: 20,
               child: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white, size: 32),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
-            if (title != null && title.isNotEmpty)
-              Positioned(
-                bottom: 40,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.black54,
-                  child: Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -138,9 +113,7 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 16,
-          right: 16,
-          top: 16,
+          left: 16, right: 16, top: 16,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -263,90 +236,41 @@ class _ProfilePageState extends State<ProfilePage> {
               clipBehavior: Clip.none,
               alignment: Alignment.center,
               children: [
-                // Cover image (คลิกเพื่อดูใหญ่, ค้างเพื่อเปลี่ยน)
                 GestureDetector(
                   onTap: () => _showImagePreview(coverUrl, title: "ຮູບພື້ນຫຼັງ"),
                   onLongPress: () {
-                    // ไปหน้า EditProfile เพื่อเปลี่ยน
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const EditProfilePage()),
-                    ).then((_) => _loadData());
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfilePage())).then((_) => _loadData());
                   },
                   child: Stack(
                     children: [
                       Container(
-                        height: 200,
-                        width: double.infinity,
+                        height: 200, width: double.infinity,
                         decoration: BoxDecoration(
-                          image: coverUrl.isNotEmpty
-                              ? DecorationImage(image: NetworkImage(coverUrl), fit: BoxFit.cover)
-                              : null,
+                          image: coverUrl.isNotEmpty ? DecorationImage(image: NetworkImage(coverUrl), fit: BoxFit.cover) : null,
                           color: Colors.grey[300],
                         ),
-                        child: coverUrl.isEmpty
-                            ? const Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey)
-                            : null,
+                        child: coverUrl.isEmpty ? const Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey) : null,
                       ),
-                      if (coverUrl.isNotEmpty)
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
-                            child: Row(
-                              children: const [
-                                Icon(Icons.visibility, color: Colors.white, size: 14),
-                                SizedBox(width: 4),
-                                Text("ເບິ່ງ", style: TextStyle(color: Colors.white, fontSize: 11)),
-                              ],
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
-                // Profile photo (คลิกเพื่อดูใหญ่, ค้างเพื่อเปลี่ยน)
                 Positioned(
                   bottom: -50,
                   child: GestureDetector(
                     onTap: () => _showImagePreview(photoUrl, title: "ຮູບໂປຣໄຟລ໌"),
                     onLongPress: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const EditProfilePage()),
-                      ).then((_) => _loadData());
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfilePage())).then((_) => _loadData());
                     },
                     child: Stack(
                       children: [
                         CircleAvatar(
-                          radius: 54,
-                          backgroundColor: Colors.white,
+                          radius: 54, backgroundColor: Colors.white,
                           child: CircleAvatar(
-                            radius: 50,
-                            backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                            radius: 50, backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
                             child: photoUrl.isEmpty ? const Icon(Icons.person, size: 50, color: Colors.grey) : null,
                           ),
                         ),
-                        if (_isUploading)
-                          const Positioned.fill(
-                            child: Center(
-                              child: CircularProgressIndicator(color: Colors.teal),
-                            ),
-                          ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: Colors.teal,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.visibility, size: 16, color: Colors.white),
-                          ),
-                        ),
+                        if (_isUploading) const Positioned.fill(child: Center(child: CircularProgressIndicator(color: Colors.teal))),
                       ],
                     ),
                   ),
@@ -357,8 +281,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
             // ─── User Info ───
             Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            if (bio.isNotEmpty)
-              Padding(padding: const EdgeInsets.all(8), child: Text(bio, style: const TextStyle(color: Colors.grey))),
+            if (bio.isNotEmpty) Padding(padding: const EdgeInsets.all(8), child: Text(bio, style: const TextStyle(color: Colors.grey))),
             const Divider(),
 
             // ─── Highlights ───
@@ -386,17 +309,49 @@ class _ProfilePageState extends State<ProfilePage> {
                 itemBuilder: (context, index) {
                   final h = highlights[index] as Map<String, dynamic>;
                   return GestureDetector(
-                    onTap: () => _showImagePreview(h['coverImage'], title: h['title']),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => HighlightViewerPage(highlight: h)),
+                      );
+                    },
                     child: Container(
                       width: 80,
-                      margin: const EdgeInsets.all(4),
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        image: DecorationImage(image: NetworkImage(h['coverImage']), fit: BoxFit.cover),
+                        borderRadius: BorderRadius.circular(36), 
+                        border: Border.all(color: Colors.grey[300]!, width: 2),
                       ),
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Text(h['title'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(30),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.network(h['coverImage'] ?? '', fit: BoxFit.cover),
+                              Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Colors.black54, Colors.transparent],
+                                    begin: Alignment.bottomCenter, end: Alignment.center,
+                                  ),
+                                ),
+                              ),
+                              Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Text(
+                                    h['title'] ?? '',
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   );
@@ -418,14 +373,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     .orderBy('createdAt', descending: true)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text("ທ່ານຍັງບໍ່ໄດ້ແຊຣ໌ໂພສຕ໌ໃດເລີຍ", style: TextStyle(color: Colors.grey)),
-                    );
+                    return const Padding(padding: EdgeInsets.all(16), child: Text("ທ່ານຍັງບໍ່ໄດ້ແຊຣ໌ໂພສຕ໌ໃດເລີຍ", style: TextStyle(color: Colors.grey)));
                   }
 
                   final posts = snapshot.data!.docs;
@@ -437,6 +387,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       final data = posts[index].data() as Map<String, dynamic>;
                       final postId = posts[index].id;
 
+                      final title = data['title'] ?? ''; // ดึง title มาใช้งาน
                       final content = data['content'] ?? '';
                       final placeName = data['placeName'] ?? '';
                       final images = (data['images'] as List?)?.map((e) => e.toString()).toList() ?? [];
@@ -455,23 +406,19 @@ class _ProfilePageState extends State<ProfilePage> {
                               Row(
                                 children: [
                                   if (placeName.isNotEmpty)
-                                    Expanded(
-                                      child: Text(
-                                        "📍 $placeName",
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  if (createdAt != null)
-                                    Text(
-                                      _formatTimeAgo(createdAt),
-                                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                                    ),
+                                    Expanded(child: Text("📍 $placeName", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis)),
+                                  if (createdAt != null) Text(_formatTimeAgo(createdAt), style: const TextStyle(color: Colors.grey, fontSize: 12)),
                                 ],
                               ),
                               const SizedBox(height: 6),
-                              if (content.isNotEmpty)
-                                Text(content, style: const TextStyle(fontSize: 15)),
+                              
+                              // แสดงหัวข้อถ้ามี
+                              if (title.isNotEmpty) ...[
+                                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                              ],
+                              
+                              if (content.isNotEmpty) Text(content, style: const TextStyle(fontSize: 15)),
                               const SizedBox(height: 8),
                               if (images.isNotEmpty)
                                 SizedBox(
@@ -493,27 +440,17 @@ class _ProfilePageState extends State<ProfilePage> {
                                     },
                                   ),
                                 ),
-                              const SizedBox(height: 10),
                               Row(
                                 children: [
                                   IconButton(
-                                    icon: Icon(
-                                      likedBy.contains(user!.uid) ? Icons.favorite : Icons.favorite_border,
-                                      color: likedBy.contains(user!.uid) ? Colors.red : Colors.grey,
-                                    ),
+                                    icon: Icon(likedBy.contains(user!.uid) ? Icons.favorite : Icons.favorite_border, color: likedBy.contains(user!.uid) ? Colors.red : Colors.grey),
                                     onPressed: () => _toggleLike(postId, likedBy, likes),
                                   ),
                                   Text('$likes', style: const TextStyle(fontSize: 14)),
                                   const Spacer(),
                                   if (isMine) ...[
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.blue),
-                                      onPressed: () => _editPost(data),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
-                                      onPressed: () => _deletePost(postId),
-                                    ),
+                                    IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editPost(data)),
+                                    IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deletePost(postId)),
                                   ],
                                 ],
                               ),
@@ -532,12 +469,128 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Helper: แสดงเวลาที่ผ่านมา
   String _formatTimeAgo(DateTime date) {
     final diff = DateTime.now().difference(date);
     if (diff.inDays > 0) return '${diff.inDays} ວັນກ່ອນ';
     if (diff.inHours > 0) return '${diff.inHours} ຊົ່ວໂມງກ່ອນ';
     if (diff.inMinutes > 0) return '${diff.inMinutes} ນາທີກ່ອນ';
     return 'ບໍ່ດົນມານີ້';
+  }
+}
+
+// ---------------------------------------------------------
+// 🌟 ລະບົບເບິ່ງໄຮໄລທ໌ແບບ Facebook/Instagram
+// ---------------------------------------------------------
+class HighlightViewerPage extends StatefulWidget {
+  final Map<String, dynamic> highlight;
+  const HighlightViewerPage({super.key, required this.highlight});
+
+  @override
+  State<HighlightViewerPage> createState() => _HighlightViewerPageState();
+}
+
+class _HighlightViewerPageState extends State<HighlightViewerPage> {
+  int currentIndex = 0;
+  late List<String> images;
+
+  @override
+  void initState() {
+    super.initState();
+    images = List<String>.from(widget.highlight['images'] ?? []);
+    if (images.isEmpty && widget.highlight['coverImage'] != null) {
+      images = [widget.highlight['coverImage']];
+    }
+  }
+
+  void _next() {
+    if (currentIndex < images.length - 1) {
+      setState(() => currentIndex++);
+    } else {
+      Navigator.pop(context); 
+    }
+  }
+
+  void _prev() {
+    if (currentIndex > 0) {
+      setState(() => currentIndex--);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (images.isEmpty) return const Scaffold(backgroundColor: Colors.black);
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            GestureDetector(
+              onTapUp: (details) {
+                final width = MediaQuery.of(context).size.width;
+                if (details.globalPosition.dx < width * 0.3) {
+                  _prev();
+                } else {
+                  _next();
+                }
+              },
+              child: Center(
+                child: Image.network(
+                  images[currentIndex],
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  height: double.infinity,
+                  loadingBuilder: (c, child, progress) {
+                    if (progress == null) return child;
+                    return const Center(child: CircularProgressIndicator(color: Colors.white));
+                  },
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10, left: 10, right: 10,
+              child: Column(
+                children: [
+                  Row(
+                    children: List.generate(images.length, (index) {
+                      return Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: index <= currentIndex ? Colors.white : Colors.white24,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text(
+                          widget.highlight['title'] ?? 'Highlight',
+                          style: const TextStyle(
+                            color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold,
+                            shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white, shadows: [Shadow(blurRadius: 4, color: Colors.black)]),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

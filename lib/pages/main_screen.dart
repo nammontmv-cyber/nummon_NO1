@@ -1,9 +1,15 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+
 import '../models/place_model.dart';
+import '../models/api_Cloudinary.dart'; 
 
 import 'home.dart';
 import 'explore.dart';
@@ -24,7 +30,6 @@ class _MainScreenState extends State<MainScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ScrollController _scrollController = ScrollController();
   
-  // ── ฟีเจอร์ซ่อน/แสดง Footer แบบ Facebook ──
   bool _isFooterVisible = true;
   bool isAdmin = false;
   final User? currentUser = FirebaseAuth.instance.currentUser;
@@ -61,7 +66,6 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
-  // ── เปิดแผนที่ Google Maps ──
   Future<void> _openGoogleMap(double lat, double lng) async {
     final String urlString = "https://www.google.com/maps/search/?api=1&query=$lat,$lng";
     final Uri url = Uri.parse(urlString);
@@ -82,17 +86,15 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ── ฟังก์ชันแก้ไขแผนการเดินทาง (เวลาไป-กลับ และ งบประมาณ) ──
   Future<void> _showEditPlanDialog(BuildContext context, DocumentSnapshot doc) async {
     final data = doc.data() as Map<String, dynamic>;
     final TextEditingController startCtrl = TextEditingController(
         text: data['startDateTime'] == 'ຍັງບໍ່ໄດ້ກຳນົດ' ? '' : data['startDateTime']);
     final TextEditingController endCtrl = TextEditingController(
-        text: data['endDateTime'] == 'ຍັງບໍ່ໄດ້ກຳนົດ' ? '' : data['endDateTime']);
+        text: data['endDateTime'] == 'ຍັງບໍ່ໄດ້ກຳນົດ' ? '' : data['endDateTime']);
     final TextEditingController budgetCtrl = TextEditingController(
         text: data['budget']?.toString() ?? '');
 
-    // ฟังก์ชันช่วยสำหรับเปิดหน้าต่างเลือก วันที่ และ เวลา
     Future<void> pickDateTime(TextEditingController controller) async {
       final DateTime? pickedDate = await showDatePicker(
         context: context,
@@ -109,14 +111,12 @@ class _MainScreenState extends State<MainScreen> {
         );
 
         if (pickedTime != null) {
-          // จัดรูปแบบ String ให้เป็น วัน/เดือน/ปี ชั่วโมง:นาที (เช่น 10/10/2024 08:00)
           final String day = pickedDate.day.toString().padLeft(2, '0');
           final String month = pickedDate.month.toString().padLeft(2, '0');
           final String year = pickedDate.year.toString();
           final String hour = pickedTime.hour.toString().padLeft(2, '0');
           final String minute = pickedTime.minute.toString().padLeft(2, '0');
 
-          // อัปเดตข้อความในกล่องข้อความโดยตรง
           controller.text = "$day/$month/$year $hour:$minute";
         }
       }
@@ -133,8 +133,8 @@ class _MainScreenState extends State<MainScreen> {
               children: [
                 TextField(
                   controller: startCtrl,
-                  readOnly: true, // บังคับไม่ให้พิมพ์เองเพื่อป้องกันข้อผิดพลาด
-                  onTap: () => pickDateTime(startCtrl), // เมื่อแตะจะเปิดตัวเลือกเวลา
+                  readOnly: true,
+                  onTap: () => pickDateTime(startCtrl),
                   decoration: const InputDecoration(
                     labelText: 'ເວລາໄປ (Start Time)',
                     hintText: 'ແຕະເພື່ອເລືອກເວລາ...',
@@ -144,8 +144,8 @@ class _MainScreenState extends State<MainScreen> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: endCtrl,
-                  readOnly: true, // บังคับไม่ให้พิมพ์เองเพื่อป้องกันข้อผิดพลาด
-                  onTap: () => pickDateTime(endCtrl), // เมื่อแตะจะเปิดตัวเลือกเวลา
+                  readOnly: true,
+                  onTap: () => pickDateTime(endCtrl),
                   decoration: const InputDecoration(
                     labelText: 'ເວລາກັບ (End Time)',
                     hintText: 'ແຕະເພື່ອເລືອກເວລາ...',
@@ -188,7 +188,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ── ยืนยันการลบสถานที่ ──
   Future<void> _confirmDelete(BuildContext context, DocumentSnapshot doc) async {
     showDialog(
       context: context,
@@ -226,7 +225,7 @@ class _MainScreenState extends State<MainScreen> {
           'status': 'planning',
           'startDateTime': 'ຍັງບໍ່ໄດ້ກຳນົດ',
           'endDateTime': 'ຍັງບໍ່ໄດ້ກຳນົດ',
-          'budget': 'ບໍ່ໄດ້ກຳນົດ', // ເພີ່ມຊ່ອງງົບປະມານ
+          'budget': 'ບໍ່ໄດ້ກຳນົດ',
           'addedAt': FieldValue.serverTimestamp(),
         });
         if (context.mounted) {
@@ -280,7 +279,6 @@ class _MainScreenState extends State<MainScreen> {
                 child: currentUser == null
                     ? const Center(child: Text("ກະລຸນາເຂົ້າສູ່ລະບົບ"))
                     : StreamBuilder<QuerySnapshot>(
-                        // ดึงข้อมูลจริงจาก Firebase แบบ Realtime
                         stream: FirebaseFirestore.instance
                             .collection('users')
                             .doc(currentUser!.uid)
@@ -338,7 +336,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ── UI Card สำหรับแสดงข้อมูลแผนการเดินทางแต่ละรายการ ──
   Widget _buildPlanCard(DocumentSnapshot doc, {required bool isCompletedType}) {
     final data = doc.data() as Map<String, dynamic>;
     String start = data['startDateTime'] ?? 'ຍັງບໍ່ໄດ້ກຳນົດ';
@@ -356,16 +353,14 @@ class _MainScreenState extends State<MainScreen> {
           children: [
             Text(data['placeName'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
-            // ສະແດງເວລາໄປ
             Row(
               children: [
                 const Icon(Icons.flight_takeoff, size: 16, color: Colors.teal),
                 const SizedBox(width: 8),
-                Expanded(child: Text("เวลาไป: $start", style: const TextStyle(fontSize: 13, color: Colors.black87))),
+                Expanded(child: Text("ເວລາໄປ: $start", style: const TextStyle(fontSize: 13, color: Colors.black87))),
               ],
             ),
             const SizedBox(height: 4),
-            // ສະແດງເວລາກັບ
             Row(
               children: [
                 const Icon(Icons.flight_land, size: 16, color: Colors.orange),
@@ -374,7 +369,6 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            // ສະແດງງົບປະມານ
             Row(
               children: [
                 const Icon(Icons.account_balance_wallet, size: 16, color: Colors.green),
@@ -385,7 +379,6 @@ class _MainScreenState extends State<MainScreen> {
             const SizedBox(height: 12),
             const Divider(height: 1),
             
-            // ── แถวปุ่มจัดการ (Map, Edit, Delete, Complete) ──
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -398,30 +391,22 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const Spacer(),
                 ],
-                
-                // ປຸ່ມແກ້ໄຂເວລາແລະງົບ
                 if (!isCompletedType)
                   IconButton(
                     tooltip: "ຈັດແຈງແຜນ",
                     icon: const Icon(Icons.edit_calendar, size: 20, color: Colors.blue), 
                     onPressed: () => _showEditPlanDialog(context, doc)
                   ),
-                
-                // ປຸ່ມເเบິ່ງແผนที่
                 IconButton(
                   tooltip: "ເບິ່ງແຜນທີ່",
                   icon: const Icon(Icons.map, size: 20, color: Colors.green), 
                   onPressed: () => _openGoogleMap(data['latitude'], data['longitude'])
                 ),
-                
-                // ປຸ່ມລົບ
                 IconButton(
                   tooltip: "ລົບແຜນການ",
                   icon: const Icon(Icons.delete, size: 20, color: Colors.red), 
                   onPressed: () => _confirmDelete(context, doc)
                 ),
-                
-                // ປຸ່ມໝາຍວ່າສຳເລັດແລ້ວ (ສຳລັບລາຍການທີ່ຍັງບໍ່ສຳເລັດ)
                 if (!isCompletedType)
                   IconButton(
                     tooltip: "ທ່ຽວສຳເລັດແລ້ວ",
@@ -437,7 +422,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// ── หน้าต่างแผ่นฟอร์มเขียนรายละเอียดและแนบรูปภาพสูงสุด 10 รูป ──
+// ── หน้าต่างแผ่นฟอร์มเขียนรายละเอียดและแนบรูปภาพ ──
 class ShareTripPostSheet extends StatefulWidget {
   final Map<String, dynamic> planData;
   const ShareTripPostSheet({super.key, required this.planData});
@@ -447,22 +432,81 @@ class ShareTripPostSheet extends StatefulWidget {
 }
 
 class _ShareTripPostSheetState extends State<ShareTripPostSheet> {
+  final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
-  final List<String> _mockUploadedImages = []; 
+  final ImagePicker _picker = ImagePicker();
+  
+  final List<File> _selectedImages = [];
+  final List<String> _existingImages = []; // เก็บรูปภาพเดิมจากสถานที่
+  
   bool _isPosting = false;
 
-  void _addMockImage() {
-    if (_mockUploadedImages.length >= 10) {
+  @override
+  void initState() {
+    super.initState();
+    // ดึงชื่อสถานที่มาตั้งเป็นหัวข้อเริ่มต้น (แก้ไขได้)
+    _titleController.text = widget.planData['placeName'] ?? '';
+    
+    // ดึงรูปภาพเดิมของสถานที่เข้ามาไว้ในลิสต์
+    if (widget.planData['imageUrl'] != null && widget.planData['imageUrl'].toString().isNotEmpty) {
+      _existingImages.add(widget.planData['imageUrl']);
+    }
+  }
+
+  // เลือกรูปจาก Gallery
+  Future<void> _pickImages() async {
+    int totalCurrentImages = _selectedImages.length + _existingImages.length;
+    if (totalCurrentImages >= 10) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ສາມາດເພີ່ມຮູບໄດ້ສູງສຸດ 10 ຮູບ")));
       return;
     }
-    setState(() {
-      _mockUploadedImages.add("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400");
-    });
+    try {
+      final List<XFile> images = await _picker.pickMultiImage();
+      if (images.isNotEmpty) {
+        setState(() {
+          for (var img in images) {
+            if ((_selectedImages.length + _existingImages.length) < 10) {
+              _selectedImages.add(File(img.path));
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
+  }
+
+  // อัปโหลดไป Cloudinary
+  Future<List<String>> _uploadImagesToCloudinary() async {
+    List<String> uploadedUrls = [];
+    for (File file in _selectedImages) {
+      final uri = Uri.parse("https://api.cloudinary.com/v1_1/${CloudinaryConfig.cloudinaryCloudName}/image/upload");
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['upload_preset'] = CloudinaryConfig.cloudinaryUploadPreset
+        ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final responseData = await response.stream.toBytes();
+        final result = json.decode(String.fromCharCodes(responseData));
+        uploadedUrls.add(result['secure_url']);
+      } else {
+        debugPrint('Cloudinary upload failed: ${response.statusCode}');
+      }
+    }
+    return uploadedUrls;
   }
 
   void _submitPost() async {
-    if (_contentController.text.trim().isEmpty) return;
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ກະລຸນາໃສ່ຫົວຂໍ້ (Title)")));
+      return;
+    }
+    if (_contentController.text.trim().isEmpty && _selectedImages.isEmpty && _existingImages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ກະລຸນາຂຽນລາຍລະອຽດ ຫຼື ເພີ່ມຮູບພາບ")));
+      return;
+    }
+    
     setState(() => _isPosting = true);
 
     final user = FirebaseAuth.instance.currentUser;
@@ -471,38 +515,55 @@ class _ShareTripPostSheetState extends State<ShareTripPostSheet> {
       return;
     }
 
-    String userName = user.displayName ?? user.email ?? 'ນັກທ່ອງທ່ຽວ';
-    String userAvatar = user.photoURL ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    if (doc.exists) {
-      userName = doc.data()?['displayName'] ?? userName;
-      userAvatar = doc.data()?['photoURL'] ?? userAvatar;
-    }
+    try {
+      // อัปโหลดรูปใหม่ทั้งหมดไป Cloudinary
+      List<String> finalImageUrls = await _uploadImagesToCloudinary();
+      
+      // นำรูปเก่าที่ดึงมาจากสถานที่มารวมกับรูปใหม่
+      finalImageUrls.insertAll(0, _existingImages);
 
-    await FirebaseFirestore.instance.collection('user_posts').add({
-      'userId': user.uid,
-      'userName': userName,
-      'userAvatar': userAvatar,
-      'placeName': widget.planData['placeName'] ?? '',
-      'content': _contentController.text.trim(),
-      'images': _mockUploadedImages.isNotEmpty ? _mockUploadedImages : [widget.planData['imageUrl'] ?? ''],
-      'createdAt': FieldValue.serverTimestamp(),
-      'type': 'user_share',
-      'likes': 0,
-      'likedBy': [],
-    });
+      String userName = user.displayName ?? user.email ?? 'ນັກທ່ອງທ່ຽວ';
+      String userAvatar = user.photoURL ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        userName = doc.data()?['displayName'] ?? userName;
+        userAvatar = doc.data()?['photoURL'] ?? userAvatar;
+      }
 
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ແຊຣ໌ຄວາມປະທັບໃຈສຳເລັດແລ້ວ!"), backgroundColor: Colors.teal),
-      );
+      await FirebaseFirestore.instance.collection('user_posts').add({
+        'userId': user.uid,
+        'userName': userName,
+        'userAvatar': userAvatar,
+        'placeName': widget.planData['placeName'] ?? '',
+        'title': _titleController.text.trim(), // บันทึกหัวข้อลง Firestore
+        'content': _contentController.text.trim(),
+        'images': finalImageUrls,
+        'createdAt': FieldValue.serverTimestamp(),
+        'type': 'user_share',
+        'likes': 0,
+        'likedBy': [],
+      });
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("ແຊຣ໌ຄວາມປະທັບໃຈສຳເລັດແລ້ວ!"), backgroundColor: Colors.teal),
+        );
+      }
+    } catch (e) {
+      debugPrint("Post Error: $e");
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ເກີດຂໍ້ຜິດພາດໃນການແຊຣ໌")));
+      }
+    } finally {
+      if (mounted) setState(() => _isPosting = false);
     }
-    setState(() => _isPosting = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    int totalImages = _selectedImages.length + _existingImages.length;
+    
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 16),
       child: Wrap(
@@ -510,34 +571,98 @@ class _ShareTripPostSheetState extends State<ShareTripPostSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("ແຊຣ໌ປະສົบການ: ${widget.planData['placeName']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text("ແຊຣ໌ປະສົບການ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               _isPosting 
-                ? const CircularProgressIndicator()
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                 : TextButton(onPressed: _submitPost, child: const Text("ໂພສຕ໌", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
             ],
           ),
+          const SizedBox(height: 8),
+          
+          // ช่องเพิ่มหัวข้อ
+          TextField(
+            controller: _titleController,
+            decoration: const InputDecoration(
+              hintText: "ຫົວຂໍ້ (Topic)...", 
+              labelText: "ຫົວຂໍ້ການແຊຣ໌",
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)
+            ),
+          ),
+          const SizedBox(height: 10),
+          
+          // ช่องเนื้อหาเดิม
           TextField(
             controller: _contentController,
-            maxLines: 4,
-            decoration: const InputDecoration(hintText: "ຂຽນລາຍລະອຽດຄວາມປະທັບໃຈຂອງທ່ານຢູ່ບ່ອນນີ້...", border: InputBorder.none),
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: "ຂຽນລາຍລະອຽດຄວາມປະທັບໃຈຂອງທ່ານຢູ່ບ່ອນນີ້...", 
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
-            onPressed: _addMockImage,
+            onPressed: _pickImages,
             icon: const Icon(Icons.add_photo_alternate),
-            label: Text("ເພີ່ມຮູບພາບທ່ຽວຂອງທ່ານ (${_mockUploadedImages.length}/10)"),
+            label: Text("ເພີ່ມຮູບພາບທ່ຽວຂອງທ່ານ ($totalImages/10)"),
           ),
           const SizedBox(height: 15),
-          if (_mockUploadedImages.isNotEmpty)
+
+          // แสดงรูปภาพทั้งที่ดึงมาและที่เลือกใหม่
+          if (totalImages > 0)
             SizedBox(
               height: 80,
-              child: ListView.builder(
+              child: ListView(
                 scrollDirection: Axis.horizontal,
-                itemCount: _mockUploadedImages.length,
-                itemBuilder: (context, i) => Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(_mockUploadedImages[i], width: 80, height: 80, fit: BoxFit.cover)),
-                ),
+                children: [
+                  // แสดงรูปเก่า (ดึงจากสถานที่)
+                  ..._existingImages.asMap().entries.map((entry) {
+                    int idx = entry.key;
+                    String url = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: Stack(
+                        children: [
+                          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: 80, height: 80, fit: BoxFit.cover)),
+                          Positioned(
+                            top: 0, right: 0,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _existingImages.removeAt(idx)),
+                              child: Container(
+                                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                child: const Icon(Icons.close, color: Colors.white, size: 16),
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    );
+                  }),
+                  
+                  // แสดงรูปใหม่ที่เพิ่งเลือก
+                  ..._selectedImages.asMap().entries.map((entry) {
+                    int idx = entry.key;
+                    File file = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: Stack(
+                        children: [
+                          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(file, width: 80, height: 80, fit: BoxFit.cover)),
+                          Positioned(
+                            top: 0, right: 0,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _selectedImages.removeAt(idx)),
+                              child: Container(
+                                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                child: const Icon(Icons.close, color: Colors.white, size: 16),
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    );
+                  }),
+                ],
               ),
             ),
           const SizedBox(height: 25),

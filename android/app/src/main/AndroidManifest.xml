@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
-        android:label="abc_new"
+        android:label="Nummon_No1"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
 
@@ -27,13 +27,11 @@
             </intent-filter>
         </activity>
 
-        <!-- สำหรับ image_cropper -->
-        <!-- 💡 แก้: ใช้ UCropTheme (กำหนดเองใน styles.xml) แทน Theme.AppCompat.Light.NoActionBar ตรงๆ
-             เพื่อให้ AppCompat resources ถูก resolve ครบ ปุ่ม Done (✓) บน toolbar จะขึ้นมาให้กดได้ -->
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
             android:theme="@style/UCropTheme" />
+            
         <activity
             android:name="com.canhub.cropper.CropImageActivity"
             android:theme="@style/UCropTheme" />
@@ -41,14 +39,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- API key นี้ใช้สำหรับ google_maps_flutter (ถ้าไม่ได้ใช้ก็ไม่เป็นไร) -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyBhmpBpL6rsu2CFxp_-AnpA_KyUa3pLvbs" />
     </application>
 
     <queries>
-        <!-- สำหรับ Google Maps -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" android:host="www.google.com" />
@@ -57,7 +53,6 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="geo" />
         </intent>
-        <!-- อันเดิม -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />

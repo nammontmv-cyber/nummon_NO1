@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http; 
+import 'dart:convert';
 import '../models/place_model.dart';
 import 'place_detail.dart';
 import '../widgets/story.dart';
+import '../models/api_Cloudinary.dart'; 
 
 class HomePage extends StatefulWidget {
   final ScrollController scrollController;
@@ -27,6 +30,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   bool isLoading = true;
   bool isAdmin = false;
+  bool _isClearingAll = false; 
   String _searchQuery = "";
   bool _isSearchVisible = false;
 
@@ -55,6 +59,92 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _clearAllDataAndImages() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text("🚨 ຄຳເຕືອນອັນຕະລາຍ 🚨"),
+        content: const Text("ທ່ານຕ້ອງການລົບສະຖານທີ່ທັງໝົດ ແລະ ຮູບພາບທັງໝົດໃນ Cloudinary ແທ້ຫຼືບໍ່? ຂໍ້ມູນຈະຫายໄປຕະຫຼອດການ!"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("ຍົກເລີກ"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); 
+              setState(() => _isClearingAll = true); 
+              
+              try {
+                final querySnapshot = await FirebaseFirestore.instance.collection('places').get();
+                
+                for (var doc in querySnapshot.docs) {
+                  final data = doc.data();
+                  List<String> urlsToDelete = [];
+                  
+                  if (data['imageUrl'] != null) urlsToDelete.add(data['imageUrl']);
+                  if (data['imageUrls'] != null) {
+                    urlsToDelete.addAll((data['imageUrls'] as List).map((e) => e.toString()));
+                  }
+
+                  for (String url in urlsToDelete) {
+                    await _deleteFromCloudinary(url);
+                  }
+                  
+                  await FirebaseFirestore.instance.collection('places').doc(doc.id).delete();
+                }
+
+                _showSnackBar("ລ້າງຂໍ້ມູນທັງໝົດສຳເລັດແລ້ວ!", isError: false);
+              } catch (e) {
+                _showSnackBar("ເກີດຂໍ້ຜິດພາດ: $e", isError: true);
+              } finally {
+                setState(() => _isClearingAll = false); 
+              }
+            },
+            child: const Text("ຢືນຢັນການລົບທັງໝົດ", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteFromCloudinary(String url) async {
+    try {
+      if (!url.contains("cloudinary.com")) return;
+      
+      final uri = Uri.parse(url);
+      final segments = uri.pathSegments;
+      if (segments.isEmpty) return;
+
+      final lastSegment = segments.last; 
+      final publicId = lastSegment.split('.').first; 
+
+      String cloudName = CloudinaryConfig.cloudName; 
+      String apiKey = CloudinaryConfig.apiKey;
+      String apiSecret = CloudinaryConfig.apiSecret; 
+
+      final String basicAuth = 'Basic ${base64Encode(utf8.encode('$apiKey:$apiSecret'))}';
+
+      final response = await http.post(
+        Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/destroy'),
+        headers: {
+          'Authorization': basicAuth,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: {
+          'public_id': publicId,
+        },
+      );
+
+      if (response.statusCode != 200) {
+        print("Failed to delete image from Cloudinary: ${response.body}");
+      }
+    } catch (e) {
+      print("Cloudinary delete error: $e");
+    }
+  }
+
   void _deletePlace(String id, String name) async {
     showDialog(
       context: context,
@@ -76,12 +166,232 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _openEditPlaceSheet(Place place) {
+  void _openArrangeImagesSheet(Place place) {
+    final List<String> images = List.from(place.imageUrls ?? []);
+    if (images.isEmpty && place.imageUrl.isNotEmpty) {
+      images.add(place.imageUrl);
+    }
+    double currentAlignmentY = place.imageAlignmentY;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => EditPlaceSheet(place: place),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "↕️ ຈັດຕຳແໜ່ງ ແລະ ເລື່ອນພາບປົກ",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text("ຕົວຢ່າງການສະແດງຜົນພາບປົก (Crop ຕຳແໜ່ງ):", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 6),
+                    Center(
+                      child: Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.teal, width: 2),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            place.imageUrl,
+                            fit: BoxFit.cover,
+                            alignment: Alignment(0, currentAlignmentY),
+                            errorBuilder: (c, e, s) => Container(color: Colors.grey[200], child: const Icon(Icons.image)),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Text("🔝 ເທິງ", style: TextStyle(fontSize: 12)),
+                        Expanded(
+                          child: Slider(
+                            value: currentAlignmentY,
+                            min: -1.0,
+                            max: 1.0,
+                            activeColor: Colors.teal,
+                            onChanged: (val) {
+                              setModalState(() {
+                                currentAlignmentY = val;
+                              });
+                            },
+                          ),
+                        ),
+                        const Text("🔙 ລຸ່ມ", style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    const Divider(),
+                    const Text(
+                      "🔄 ຈັດລຽງລໍາດັບຮູບພາບ (ຍ້າຍຂຶ້ນ/ລົງ)",
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    images.isEmpty
+                        ? const Center(child: Text("ບໍ່ມີຮູບພາບໃຫ້ຈັດຕຳແໜ່ງ"))
+                        : Expanded(
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: images.length,
+                              itemBuilder: (context, index) {
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  child: ListTile(
+                                    leading: ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Image.network(images[index], width: 50, height: 50, fit: BoxFit.cover),
+                                    ),
+                                    title: Text("ຮູບພາບທີ ${index + 1}"),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (index > 0)
+                                          IconButton(
+                                            icon: const Icon(Icons.arrow_upward, color: Colors.teal),
+                                            onPressed: () {
+                                              setModalState(() {
+                                                final temp = images[index];
+                                                images[index] = images[index - 1];
+                                                images[index - 1] = temp;
+                                              });
+                                            },
+                                          ),
+                                        if (index < images.length - 1)
+                                          IconButton(
+                                            icon: const Icon(Icons.arrow_downward, color: Colors.teal),
+                                            onPressed: () {
+                                              setModalState(() {
+                                                final temp = images[index];
+                                                images[index] = images[index + 1];
+                                                images[index + 1] = temp;
+                                              });
+                                            },
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        try {
+                          await FirebaseFirestore.instance
+                              .collection('places')
+                              .doc(place.id)
+                              .update({
+                            'imageUrls': images,
+                            'imageAlignmentY': currentAlignmentY,
+                            if (images.isNotEmpty) 'imageUrl': images.first
+                          });
+                          _showSnackBar("ຈັດຮຽງຕຳແໜ່ງຮູບພາບ ແລະ ຕຳແໜ່ງເລື່ອນພາບສຳເລັດແລ້ວ!");
+                        } catch (e) {
+                          _showSnackBar("ເກີดຂໍ້ຜິດພາດ: $e", isError: true);
+                        }
+                      },
+                      child: const Text("ບັນທຶກຕຳແໜ່ງໃໝ່"),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openSelectCoverSheet(Place place) {
+    final List<String> images = place.imageUrls ?? [];
+    if (images.isEmpty && place.imageUrl.isNotEmpty) {
+      images.add(place.imageUrl);
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "📸 ເລືອກຮູບພາບປົກໃຫມ່",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal),
+              ),
+              const SizedBox(height: 12),
+              images.isEmpty
+                  ? const Center(child: Text("ບໍ່ມີຮູບພາບໃຫ້ເລືອກ"))
+                  : SizedBox(
+                      height: 120,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: images.length,
+                        itemBuilder: (context, index) {
+                          final isCurrentCover = images[index] == place.imageUrl;
+                          return GestureDetector(
+                            onTap: () async {
+                              Navigator.pop(context);
+                              try {
+                                await FirebaseFirestore.instance
+                                    .collection('places')
+                                    .doc(place.id)
+                                    .update({'imageUrl': images[index]});
+                                _showSnackBar("ປ່ຽນຮູບພາບປົກສຳເລັດແລ້ວ!");
+                              } catch (e) {
+                                _showSnackBar("ເກີດຂໍ້ຜິດພາດ: $e", isError: true);
+                              }
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 10),
+                              width: 120,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isCurrentCover ? Colors.teal : Colors.grey.shade300,
+                                  width: isCurrentCover ? 3 : 1,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.network(images[index], fit: BoxFit.cover),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -91,493 +401,368 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: SingleChildScrollView(
-        controller: widget.scrollController,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Banner
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
-              decoration: const BoxDecoration(color: Colors.teal, borderRadius: BorderRadius.vertical(bottom: Radius.circular(32))),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            controller: widget.scrollController,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+                  decoration: const BoxDecoration(color: Colors.teal, borderRadius: BorderRadius.vertical(bottom: Radius.circular(32))),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.menu, color: Colors.white, size: 28),
-                        onPressed: widget.onMenuPressed,
-                      ),
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           IconButton(
-                            icon: Icon(
-                              _isSearchVisible ? Icons.close : Icons.search,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isSearchVisible = !_isSearchVisible;
-                                if (!_isSearchVisible) _searchQuery = "";
-                              });
-                            },
+                            icon: const Icon(Icons.menu, color: Colors.white, size: 28),
+                            onPressed: widget.onMenuPressed,
                           ),
-                          const SizedBox(width: 8),
-                          // ═══ ใช้ StreamBuilder ดึงโปรไฟล์จริง ═══
-                          StreamBuilder<DocumentSnapshot>(
-                            stream: currentUser != null
-                                ? FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(currentUser.uid)
-                                    .snapshots()
-                                : const Stream.empty(),
-                            builder: (context, snapshot) {
-                              String photoUrl = '';
-                              String displayName = '';
-
-                              if (snapshot.hasData && snapshot.data!.exists) {
-                                final data = snapshot.data!.data() as Map<String, dynamic>?;
-                                photoUrl = data?['photoURL'] ?? '';
-                                displayName = data?['displayName'] ?? '';
-                              }
-
-                              // ถ้ายังไม่มีใน Firestore ให้ใช้จาก Auth
-                              if (photoUrl.isEmpty && currentUser != null) {
-                                photoUrl = currentUser.photoURL ?? '';
-                              }
-                              if (displayName.isEmpty && currentUser != null) {
-                                displayName = currentUser.displayName ?? currentUser.email ?? '';
-                              }
-
-                              return GestureDetector(
-                                onTap: widget.onProfilePressed,
-                                child: Stack(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 22,
-                                      backgroundImage: photoUrl.isNotEmpty
-                                          ? NetworkImage(photoUrl)
-                                          : const AssetImage('assets/default.jpg') as ImageProvider,
-                                      child: photoUrl.isEmpty
-                                          ? const Icon(Icons.person, color: Colors.grey)
-                                          : null,
-                                    ),
-                                    Positioned(
-                                      bottom: 0,
-                                      right: 0,
-                                      child: Container(
-                                        width: 12,
-                                        height: 12,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.greenAccent,
-                                          shape: BoxShape.circle,
-                                          // border: Border.all(color: Colors.red, width: 2), // ✅ เปลี่ยนเป็นสีแดง
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 25),
-                  Text(
-                    isAdmin ? "ສະບາຍດີ, Admin 🛠️" : "ສະບາຍດີ, ນັກທ່ອງທ່ຽວ 👋",
-                    style: const TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    "ຊອກຫາສະຖານທີ່ໃໝ່ໆ",
-                    style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  if (_isSearchVisible) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4))],
-                      ),
-                      child: TextField(
-                        onChanged: (value) => setState(() => _searchQuery = value.trim()),
-                        decoration: const InputDecoration(
-                          hintText: "ຄົ້ນຫາສະຖານທີ່ ຫຼື ເມືອງ...",
-                          prefixIcon: Icon(Icons.search, color: Colors.teal),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 14),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            // Story Section
-            const StorySection(),
-
-            // Places Section
-            const Padding(
-              padding: EdgeInsets.only(left: 20, top: 24, bottom: 12),
-              child: Text(
-                "ສະຖານທີ່ຍອດນິຍົມ",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            if (isLoading)
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: 2,
-                itemBuilder: (context, index) => Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Container(height: 240, color: Colors.white),
-                  ),
-                ),
-              )
-            else
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('places').snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: Colors.teal));
-                  }
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text("ບໍ່ມີຂໍ້ມູນສະຖານທີ່"),
-                      ),
-                    );
-                  }
-
-                  final docs = snapshot.data!.docs;
-                  final filteredDocs = docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final name = (data['name'] ?? '').toString().toLowerCase();
-                    final district = (data['district'] ?? '').toString().toLowerCase();
-                    final query = _searchQuery.toLowerCase();
-                    return name.contains(query) || district.contains(query);
-                  }).toList();
-
-                  if (filteredDocs.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Text(
-                          "ບໍ່ພົບສະຖານທີ່ທີ່ທ່ານຄົ້ນຫາ",
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
-                        ),
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filteredDocs.length,
-                    itemBuilder: (context, index) {
-                      final data = filteredDocs[index].data() as Map<String, dynamic>;
-                      final place = Place(
-                        id: filteredDocs[index].id,
-                        name: data['name'] ?? '',
-                        district: data['district'] ?? '',
-                        description: data['description'] ?? '',
-                        imageUrl: data['imageUrl'] ?? '',
-                        imageUrls: (data['imageUrls'] as List?)?.map((e) => e.toString()).toList() ?? [],
-                        latitude: double.tryParse(data['latitude'].toString()) ?? 0.0,
-                        longitude: double.tryParse(data['longitude'].toString()) ?? 0.0,
-                      );
-
-                      return GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PlaceDetailPage(
-                              place: place,
-                              onAddToPlan: widget.onAddToPlan,
-                            ),
-                          ),
-                        ),
-                        child: Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          Row(
                             children: [
-                              Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                                    child: Image.network(
-                                      place.imageUrl,
-                                      height: 180,
-                                      width: double.infinity,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) => Container(
-                                        height: 180,
-                                        color: Colors.grey[300],
-                                        child: const Icon(Icons.image, size: 50),
-                                      ),
-                                    ),
-                                  ),
-                                  if ((place.imageUrls?.length ?? 0) > 1)
-                                    Positioned(
-                                      bottom: 8,
-                                      right: 8,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black54,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.photo_library, color: Colors.white, size: 12),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              '${place.imageUrls!.length}',
-                                              style: const TextStyle(color: Colors.white, fontSize: 11),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-if (isAdmin)
-  Positioned(
-    top: 4,
-    right: 4,
-    child: PopupMenuButton<String>(
-      icon: const Icon(
-        Icons.more_vert,
-        color: Colors.white,
-        size: 28,
-        shadows: [Shadow(color: Colors.black54, blurRadius: 6, offset: Offset(0, 2))],
-      ),
-      onSelected: (value) => value == 'edit'
-          ? _openEditPlaceSheet(place)
-          : _deletePlace(place.id, place.name),
-      itemBuilder: (context) => [
-
-        const PopupMenuItem(
-          value: 'delete',
-          child: Row(
-            children: [
-              Icon(Icons.delete, color: Colors.red),
-              SizedBox(width: 8),
-              Text('ລົບ', style: TextStyle(color: Colors.red)),
-            ],
-          ),
-        ),
-      ],
-    ),
-  ),
-                                ],
+                              if (isAdmin)
+                                IconButton(
+                                  icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 30),
+                                  tooltip: "ລ້າງຂໍ້ມູນທັງໝົດ",
+                                  onPressed: _clearAllDataAndImages,
+                                ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: Icon(
+                                  _isSearchVisible ? Icons.close : Icons.search,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isSearchVisible = !_isSearchVisible;
+                                    if (!_isSearchVisible) _searchQuery = "";
+                                  });
+                                },
                               ),
-                              Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      place.name,
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
+                              const SizedBox(width: 8),
+                              StreamBuilder<DocumentSnapshot>(
+                                stream: currentUser != null
+                                    ? FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(currentUser.uid)
+                                        .snapshots()
+                                    : const Stream.empty(),
+                                builder: (context, snapshot) {
+                                  String photoUrl = '';
+                                  String displayName = '';
+
+                                  if (snapshot.hasData && snapshot.data!.exists) {
+                                    final data = snapshot.data!.data() as Map<String, dynamic>?;
+                                    photoUrl = data?['photoURL'] ?? '';
+                                    displayName = data?['displayName'] ?? '';
+                                  }
+
+                                  if (photoUrl.isEmpty && currentUser != null) {
+                                    photoUrl = currentUser.photoURL ?? '';
+                                  }
+                                  if (displayName.isEmpty && currentUser != null) {
+                                    displayName = currentUser.displayName ?? currentUser.email ?? '';
+                                  }
+
+                                  return GestureDetector(
+                                    onTap: widget.onProfilePressed,
+                                    child: Stack(
                                       children: [
-                                        const Icon(Icons.location_on, size: 14, color: Colors.red),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          place.district,
-                                          style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                        CircleAvatar(
+                                          radius: 22,
+                                          backgroundImage: photoUrl.isNotEmpty
+                                              ? NetworkImage(photoUrl)
+                                              : const AssetImage('assets/default.jpg') as ImageProvider,
+                                          child: photoUrl.isEmpty
+                                              ? const Icon(Icons.person, color: Colors.grey)
+                                              : null,
+                                        ),
+                                        Positioned(
+                                          bottom: 0,
+                                          right: 0,
+                                          child: Container(
+                                            width: 12,
+                                            height: 12,
+                                            decoration: const BoxDecoration(
+                                              color: Colors.greenAccent,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                             ],
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        "ຊອກຫາສະຖານທີ່ໃໝ່ໆ",
+                        style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                      if (_isSearchVisible) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4))],
+                          ),
+                          child: TextField(
+                            onChanged: (value) => setState(() => _searchQuery = value.trim()),
+                            decoration: const InputDecoration(
+                              hintText: "ຄົ້ນຫາສະຖານທີ່ ຫຼື ເມືອງ...",
+                              prefixIcon: Icon(Icons.search, color: Colors.teal),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
                         ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const StorySection(),
+
+                const Padding(
+                  padding: EdgeInsets.only(left: 20, top: 24, bottom: 12),
+                  child: Text(
+                    "ສະຖານທີ່ຍອດນິຍົມ",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (isLoading)
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: 2,
+                    itemBuilder: (context, index) => Shimmer.fromColors(
+                      baseColor: Colors.grey[300]!,
+                      highlightColor: Colors.grey[100]!,
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Container(height: 240, color: Colors.white),
+                      ),
+                    ),
+                  )
+                else
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('places').snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator(color: Colors.teal));
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text("ບໍ່ມີຂໍ້ມູນສະຖານທີ່"),
+                          ),
+                        );
+                      }
+
+                      final docs = snapshot.data!.docs;
+                      final filteredDocs = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final name = (data['name'] ?? '').toString().toLowerCase();
+                        final district = (data['district'] ?? '').toString().toLowerCase();
+                        final query = _searchQuery.toLowerCase();
+                        return name.contains(query) || district.contains(query);
+                      }).toList();
+
+                      if (filteredDocs.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: Text(
+                              "ບໍ່ພົບສະຖານທີ່ທີ່ທ່ານຄົ້ນຫາ",
+                              style: TextStyle(color: Colors.grey, fontSize: 14),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filteredDocs.length,
+                        itemBuilder: (context, index) {
+                          final data = filteredDocs[index].data() as Map<String, dynamic>;
+                          final place = Place.fromMap(filteredDocs[index].id, data);
+
+                          return GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PlaceDetailPage(
+                                  place: place,
+                                  onAddToPlan: widget.onAddToPlan,
+                                ),
+                              ),
+                            ),
+                            child: Card(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                        child: Image.network(
+                                          place.imageUrl,
+                                          height: 180,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          alignment: Alignment(0, place.imageAlignmentY), // <-- ดึงช่วงแสดงผลแนวตั้งมาใช้
+                                          errorBuilder: (c, e, s) => Container(
+                                            height: 180,
+                                            color: Colors.grey[300],
+                                            child: const Icon(Icons.image, size: 50),
+                                          ),
+                                        ),
+                                      ),
+                                      if ((place.imageUrls?.length ?? 0) > 1)
+                                        Positioned(
+                                          bottom: 8,
+                                          right: 8,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black54,
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const Icon(Icons.photo_library, color: Colors.white, size: 12),
+                                                const SizedBox(width: 3),
+                                                Text(
+                                                  '${place.imageUrls!.length}',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      if (isAdmin)
+                                        Positioned(
+                                          top: 4,
+                                          right: 4,
+                                          child: PopupMenuButton<String>(
+                                            icon: const Icon(
+                                              Icons.more_vert,
+                                              color: Colors.white,
+                                              size: 28,
+                                              shadows: [Shadow(color: Colors.black54, blurRadius: 6, offset: Offset(0, 2))],
+                                            ),
+                                            onSelected: (value) {
+                                              if (value == 'arrange_images') {
+                                                _openArrangeImagesSheet(place);
+                                              } else if (value == 'set_cover') {
+                                                _openSelectCoverSheet(place);
+                                              } else {
+                                                _deletePlace(place.id, place.name);
+                                              }
+                                            },
+                                            itemBuilder: (context) => [
+                                              const PopupMenuItem(
+                                                value: 'arrange_images',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.swap_vert, color: Colors.teal),
+                                                    SizedBox(width: 8),
+                                                    Text('ຈັດຕຳແໜ່ງຮູບພາບ'),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'set_cover',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.add_photo_alternate, color: Colors.blue),
+                                                    SizedBox(width: 8),
+                                                    Text('ຕັ້ງເປັນຮູບໜ້າປົກ'),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'delete',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.delete, color: Colors.red),
+                                                    SizedBox(width: 8),
+                                                    Text('ລົບ', style: TextStyle(color: Colors.red)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          place.name,
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.location_on, size: 14, color: Colors.red),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              place.district,
+                                              style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── EditPlaceSheet ─── (ไม่มีการเปลี่ยนแปลง)
-class EditPlaceSheet extends StatefulWidget {
-  final Place place;
-  const EditPlaceSheet({super.key, required this.place});
-
-  @override
-  State<EditPlaceSheet> createState() => _EditPlaceSheetState();
-}
-
-class _EditPlaceSheetState extends State<EditPlaceSheet> {
-  final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameController;
-  late TextEditingController _districtController;
-  late TextEditingController _descController;
-  late TextEditingController _imageUrlController;
-  late TextEditingController _imageUrlsController;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.place.name);
-    _districtController = TextEditingController(text: widget.place.district);
-    _descController = TextEditingController(text: widget.place.description);
-    _imageUrlController = TextEditingController(text: widget.place.imageUrl);
-    _imageUrlsController = TextEditingController(
-      text: widget.place.imageUrls?.join(', ') ?? '',
-    );
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _districtController.dispose();
-    _descController.dispose();
-    _imageUrlController.dispose();
-    _imageUrlsController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveData() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isSaving = true);
-
-    try {
-      List<String> imageUrls = [];
-      if (_imageUrlsController.text.trim().isNotEmpty) {
-        imageUrls = _imageUrlsController.text
-            .split(',')
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
-      }
-
-      await FirebaseFirestore.instance.collection('places').doc(widget.place.id).update({
-        'name': _nameController.text.trim(),
-        'district': _districtController.text.trim(),
-        'description': _descController.text.trim(),
-        'imageUrl': _imageUrlController.text.trim(),
-        'imageUrls': imageUrls,
-      });
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("ອັບເດດຂໍ້ມູນສຳເລັດ!"), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("ເກີດຂໍ້ຜິດພາດ: $e"), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 16,
-        right: 16,
-        top: 16,
-      ),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "🛠️ ແກ້ໄຂຂໍ້ມູນສະຖານທີ່",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const Divider(),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: "ຊື່ສະຖານທີ່"),
-                validator: (v) => v!.isEmpty ? "ກະລຸນາປ້ອນຊື່" : null,
-              ),
-              TextFormField(
-                controller: _districtController,
-                decoration: const InputDecoration(labelText: "ເມືອງ / ແຂວງ"),
-                validator: (v) => v!.isEmpty ? "ກະລຸນາປ້ອນເມືອງ" : null,
-              ),
-              TextFormField(
-                controller: _descController,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: "ລາຍລະອຽດ"),
-                validator: (v) => v!.isEmpty ? "ກະລຸນາປ້ອນລາຍລະອຽດ" : null,
-              ),
-              TextFormField(
-                controller: _imageUrlController,
-                decoration: const InputDecoration(labelText: "Link ຮູບພາບປົກ (URL)"),
-                validator: (v) => v!.isEmpty ? "ກະລຸນາປ້ອນ URL" : null,
-              ),
-              TextFormField(
-                controller: _imageUrlsController,
-                decoration: const InputDecoration(
-                  labelText: "ຮູບພາບທັງໝົດ (ແຍກດ້ວຍ ,)",
-                  hintText: "https://... , https://...",
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 20),
-              _isSaving
-                  ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                      onPressed: _saveData,
-                      child: const Text("ບັນທຶກ"),
-                    ),
-              const SizedBox(height: 20),
-            ],
+              ],
+            ),
           ),
-        ),
+          if (_isClearingAll)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: Colors.teal),
+                    SizedBox(height: 16),
+                    Text(
+                      "ກຳລັງລົບຂໍ້ມູນທังໝົດ...",
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    )
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

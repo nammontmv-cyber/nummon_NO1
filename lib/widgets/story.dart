@@ -1,24 +1,26 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
-import 'package:crypto/crypto.dart'; // เพิ่มสำหรับการทำ Signature ลบไฟล์
-import 'story_preview_page.dart'; // ກວດສອບ path ໃຫ້ຖືກຕ້ອງກັບໂປຣເຈັກຂອງທ່ານ
+import 'package:crypto/crypto.dart'; 
+import 'package:video_compress/video_compress.dart'; // 🌟 ເພີ່ມຕົວບີບອັດວິດີໂອ
+import '../models/api_Cloudinary.dart'; // 🌟 Import Config
+import 'story_preview_page.dart'; 
 
 // ---------------------------------------------------------
-// ฟังก์ชันตัวช่วยสำหรับลบไฟล์ออกจาก Cloudinary
+// ฟังก์ชันลบไฟล์ออกจาก Cloudinary แบบละเอียด (Pro Delete)
 // ---------------------------------------------------------
 Future<void> deleteFromCloudinary(String url, bool isVideo) async {
   try {
-    const cloudName = "duo2b46ro"; // Cloud Name ของคุณ
-    const apiKey = "271696571532427"; // 🔴 ใส่ API Key ของคุณที่นี่
-    const apiSecret = "q7BIw0BsfNA94ZCsqEqqnpSm-Dk"; // 🔴 ใส่ API Secret ของคุณที่นี่
+    final cloudName = CloudinaryConfig.cloudinaryCloudName;
+    final apiKey = CloudinaryConfig.cloudinaryApiKey;
+    final apiSecret = CloudinaryConfig.cloudinaryApiSecret;
 
-    // 1. ดึง public_id ออกจาก URL
     Uri uri = Uri.parse(url);
     List<String> segments = uri.pathSegments;
     int uploadIndex = segments.indexOf('upload');
@@ -26,31 +28,31 @@ Future<void> deleteFromCloudinary(String url, bool isVideo) async {
 
     List<String> publicIdSegments = [];
     for (int i = uploadIndex + 1; i < segments.length; i++) {
-      // ข้ามเวอร์ชัน เช่น v123456789
-      if (RegExp(r'^v\d+$').hasMatch(segments[i])) continue;
-      // ข้ามค่าการปรับแต่ง (transformations) เช่น so_0.0,eo_10.0
-      if (segments[i].contains('so_') || segments[i].contains('eo_')) continue;
-      
+      if (RegExp(r'^v\d+$').hasMatch(segments[i])) continue; // ຂ້າມເວີຊັນ
+      // ຂ້າມ Transformations ຕ່າງໆທີ່ Cloudinary ສ້າງຂຶ້ນ
+      if (segments[i].contains('so_') || segments[i].contains('eo_') || 
+          segments[i].contains('f_') || segments[i].contains('q_') || segments[i].contains('vc_')) {
+        continue;
+      }
       publicIdSegments.add(segments[i]);
     }
 
     String publicIdWithExtension = publicIdSegments.join('/');
     String publicId = publicIdWithExtension;
-    // ตัดนามสกุลไฟล์ออก
+    
+    // ຕັດນາມສະກຸນໄຟລ໌ອອກ
     if (publicIdWithExtension.contains('.')) {
       publicId = publicIdWithExtension.substring(0, publicIdWithExtension.lastIndexOf('.'));
     }
 
     if (publicId.isEmpty) return;
 
-    // 2. สร้าง Signature ป้องกันความปลอดภัยตามกฎของ Cloudinary
     final timestamp = (DateTime.now().millisecondsSinceEpoch / 1000).round().toString();
     final stringToSign = "public_id=$publicId&timestamp=$timestamp$apiSecret";
     final bytes = utf8.encode(stringToSign);
     final digest = sha1.convert(bytes);
     final signature = digest.toString();
 
-    // 3. ส่ง Request สั่งลบ
     final resourceType = isVideo ? "video" : "image";
     final deleteUri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/$resourceType/destroy");
 
@@ -64,7 +66,7 @@ Future<void> deleteFromCloudinary(String url, bool isVideo) async {
     if (response.statusCode == 200) {
       debugPrint("✅ ລົບໄຟລ໌ອອກຈາກ Cloudinary ສຳເລັດ: $publicId");
     } else {
-      debugPrint("❌ ບໍ່ສາມາດລົບໄຟລ໌จาก Cloudinary ໄດ້: ${response.body}");
+      debugPrint("❌ ລົບ Cloudinary ຜິດພາດ: ${response.body}");
     }
   } catch (e) {
     debugPrint("Cloudinary delete error: $e");
@@ -107,12 +109,10 @@ class _StorySectionState extends State<StorySection> {
         final String? url = data['storyImage'];
         final bool isVideo = data['mediaType'] == 'video';
 
-        // 🔴 สั่งลบจาก Cloudinary ก่อน
         if (url != null && url.isNotEmpty) {
           await deleteFromCloudinary(url, isVideo);
         }
         
-        // กำหนดให้ลบออกจาก Firestore
         batch.delete(doc.reference);
       }
       
@@ -168,17 +168,11 @@ class _StorySectionState extends State<StorySection> {
       userAvatar = userDoc.data()!['photoUrl'].toString();
     }
 
-    // if (userAvatar.isEmpty || userAvatar.contains('default.jpg')) {
-    //   _showSnackBar("ກະລຸນາຕັ້ງຮູບໂປຣໄຟລ໌ກ່ອນສ້າງສະຕໍຣີ່", isError: true);
-    //   return;
-    // }
-
     XFile? file;
     if (isVideo) {
-      // 🔓 ปลดล็อกข้อจำกัดวิดีโอ เพื่อให้เลือกวิดีโอยาวจากแกลเลอรีได้ทั้งหมด (แล้วไปสไลด์เลือก 20 วิในหน้าพรีวิว)
       file = await _picker.pickVideo(source: ImageSource.gallery);
     } else {
-      file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 60);
+      file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
     }
 
     if (file == null) return;
@@ -255,30 +249,69 @@ class _StorySectionState extends State<StorySection> {
     double? startSeconds,
     double? endSeconds,
   }) async {
-    const cloudName = "duo2b46ro";
-    const uploadPreset = "travel_app_preset"; 
+    final cloudName = CloudinaryConfig.cloudinaryCloudName;
+    final uploadPreset = CloudinaryConfig.cloudinaryUploadPreset; 
+    
+    File fileToUpload = File(file.path);
+
+    // 🌟 บีบอัดวิดีโอก่อนอัปโหลด ช่วยให้อัปโหลดไวขึ้นและประหยัดเน็ตผู้ใช้
+    if (isVideo) {
+      try {
+        final info = await VideoCompress.compressVideo(
+          file.path,
+          quality: VideoQuality.MediumQuality,
+          deleteOrigin: false,
+        );
+        if (info != null && info.file != null) {
+          fileToUpload = info.file!;
+        }
+      } catch (e) {
+        debugPrint("Video compress error: $e");
+      }
+    }
+
     final resourceType = isVideo ? "video" : "image";
     final uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload");
     
     final request = http.MultipartRequest("POST", uri);
     request.fields['upload_preset'] = uploadPreset;
-    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+
+    // 🌟 สั่งให้ Cloudinary ทำการ Eager Processing ตัดวิดีโอทันทีที่อัปโหลด
+    // ทำให้เวลาดึงมาเล่น วิดีโอจะสมบูรณ์แล้ว ไม่ต้องประมวลผลให้กระตุก
+    if (isVideo && startSeconds != null && endSeconds != null && endSeconds > startSeconds) {
+      request.fields['eager'] = 'so_${startSeconds.toStringAsFixed(2)},eo_${endSeconds.toStringAsFixed(2)},f_auto,q_auto,vc_auto';
+      request.fields['eager_async'] = 'false'; // รอกลับมาเลย
+    }
+
+    request.files.add(await http.MultipartFile.fromPath('file', fileToUpload.path));
     
     final response = await request.send();
-    if (response.statusCode != 200) throw Exception("ອັບໂຫຼດລົ້ມេຫຼວ");
+
+    // ล้าง Cache วิดีโอที่บีบอัดเพื่อไม่ให้รกเครื่อง
+    if (isVideo) {
+      VideoCompress.deleteAllCache();
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception("ອັບໂຫຼດລົ້ມເຫຼວ (Code: ${response.statusCode})");
+    }
 
     final responseData = await response.stream.toBytes();
     final jsonMap = jsonDecode(String.fromCharCodes(responseData));
     String url = jsonMap['secure_url'];
 
-    if (isVideo && startSeconds != null && endSeconds != null && endSeconds > startSeconds) {
-      url = _applyVideoTrimTransformation(url, startSeconds, endSeconds);
+    // 🌟 หากเราสั่งตัดวิดีโอ ให้หยิบ URL ตัวที่ตัดสำเร็จแล้วมาใช้ (จะเล่นได้ลื่นทันที)
+    if (isVideo && startSeconds != null && endSeconds != null) {
+      if (jsonMap['eager'] != null && jsonMap['eager'].isNotEmpty) {
+        url = jsonMap['eager'][0]['secure_url'];
+      } else {
+        url = _applyVideoTrimTransformation(url, startSeconds, endSeconds);
+      }
     }
 
     return url; 
   }
 
-  // ✨ ปรับแต่งฟังก์ชันส่ง Transformation ไปยัง Cloudinary ให้รองรับการตัด + f_auto,q_auto ปลายทางเล่นลื่นทันที
   String _applyVideoTrimTransformation(String url, double startSeconds, double endSeconds) {
     const marker = '/upload/';
     final idx = url.indexOf(marker);
@@ -286,7 +319,7 @@ class _StorySectionState extends State<StorySection> {
 
     final insertPos = idx + marker.length;
     final transformation =
-        'so_${startSeconds.toStringAsFixed(1)},eo_${endSeconds.toStringAsFixed(1)},f_auto,q_auto/';
+        'so_${startSeconds.toStringAsFixed(2)},eo_${endSeconds.toStringAsFixed(2)},f_auto,q_auto,vc_auto/';
     return url.substring(0, insertPos) + transformation + url.substring(insertPos);
   }
 
@@ -534,7 +567,7 @@ class _FacebookStoryViewerState extends State<FacebookStoryViewer> {
         if (_isDisposed) return;
         _videoController!.play();
         setState(() { _isVideoPlaying = true; });
-        _startVideoProgress(); // 🌟 ตอนนี้จะไม่แดงแล้วครับ
+        _startVideoProgress(); 
       } catch (e) {
         _nextStory();
       }
@@ -555,7 +588,6 @@ class _FacebookStoryViewerState extends State<FacebookStoryViewer> {
     });
   }
 
-  // 🌟 เพิ่มฟังก์ชันควบคุมแถบวิ่งเวลาของวิดีโอเข้ามาตรงนี้
   void _startVideoProgress() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(milliseconds: 50), (t) {

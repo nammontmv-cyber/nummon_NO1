@@ -23,9 +23,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
   VideoPlayerController? _videoController;
   bool _isInitialized = false;
 
-  // สำหรับระบบปรับความสั้น-ยาว วิดีโอ
   double _startValue = 0.0;
-  double _endValue = 20.0; // ⏱️ ตั้งค่าเริ่มต้นของตัวเลือกตอนจบไว้ที่ 20 วินาที
+  double _endValue = 20.0; 
   double _maxDuration = 20.0;
 
   @override
@@ -41,8 +40,11 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
       ..initialize().then((_) {
         if (mounted) {
           setState(() {
-            _maxDuration = _videoController!.value.duration.inSeconds.toDouble();
-            // ⏱️ จำกัดช่วงเริ่มต้นสูงสุดของการเลือกไม่เกิน 20 วินาที ตามที่ต้องการ
+            // 🌟 ໃຊ້ Milliseconds ແລ້ວຫານເພື່ອໃຫ້ໄດ້ທົດສະນິຍົມທີ່ລະອຽດແທ້ຈິງ ປ້ອງກັນບັກ Slider
+            double maxDur = _videoController!.value.duration.inMilliseconds.toDouble() / 1000.0;
+            if (maxDur <= 0.0) maxDur = 1.0; // ກັນ Error ຖ້າວິດີໂອຜິດປົກກະຕິ
+            _maxDuration = maxDur;
+            
             _endValue = _maxDuration > 20.0 ? 20.0 : _maxDuration;
             _isInitialized = true;
           });
@@ -73,7 +75,6 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
       ),
       body: Stack(
         children: [
-          // ── ส่วนแสดงผลภาพ หรือ วิดีโอพรีวิว ──
           Positioned.fill(
             child: Align(
               alignment: Alignment.center,
@@ -88,7 +89,6 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
             ),
           ),
 
-          // ── เครื่องมือปรับเวลา และ ปุ่มกดแชร์เลย ──
           Positioned(
             bottom: 40,
             left: 16,
@@ -96,7 +96,6 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // จะแสดงแถบเครื่องมือปรับความยาวเฉพาะเมื่อเป็น วิดีโอ เท่านั้น
                 if (widget.isVideo && _isInitialized) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -125,12 +124,11 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        // Slider ปรับช่วงความสั้น-ยาว (RangeSlider)
+                        // 🌟 ເອົາ divisions ອອກເພື່ອໃຫ້ເລື່ອນແຖບໄດ້ແບບອິດສະຫຼະ (Smooth Continuous Sliding)
                         RangeSlider(
                           values: RangeValues(_startValue, _endValue),
                           min: 0.0,
                           max: _maxDuration,
-                          divisions: _maxDuration.toInt() > 0 ? _maxDuration.toInt() : 1,
                           activeColor: Colors.tealAccent,
                           inactiveColor: Colors.white24,
                           labels: RangeLabels(
@@ -138,13 +136,11 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
                             '${_endValue.toStringAsFixed(1)}s',
                           ),
                           onChanged: (RangeValues values) {
-                            // ⏱️ บังคับให้ผู้ใช้เลือกช่วงใดช่วงหนึ่งจากทั้งแท่งวิดีโอ โดยความยาวต้องไม่เกิน 20 วินาที
                             if (values.end - values.start <= 20.0) {
                               setState(() {
                                 _startValue = values.start;
                                 _endValue = values.end;
                               });
-                              // แอบเลื่อนวิดีโอไปเริ่มต้นจุดพรีวิวใหม่แบบละเอียดด้วยมิลลิวินาที เมื่อผู้ใช้เลื่อนแถบเลือกช่วง
                               _videoController!.seekTo(Duration(milliseconds: (_startValue * 1000).toInt()));
                             }
                           },
@@ -155,7 +151,6 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
                   const SizedBox(height: 20),
                 ],
 
-                // ── ปุ่มกดแชร์เลย (Share Button) ──
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.teal,
@@ -170,8 +165,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
-                    Navigator.pop(context); // ปิดหน้า Preview
-                    widget.onShare(widget.file, _startValue, _endValue); // ส่งคำสั่งไปทำงานที่หน้าหลัก
+                    Navigator.pop(context); 
+                    widget.onShare(widget.file, _startValue, _endValue);
                   },
                 ),
               ],

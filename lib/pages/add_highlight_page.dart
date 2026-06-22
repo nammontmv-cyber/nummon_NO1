@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import '../models/api_Cloudinary.dart'; // 🌟 เรียกใช้ Config ส่วนกลางเพื่อความเป็นระบบ
 
 class AddHighlightPage extends StatefulWidget {
   const AddHighlightPage({super.key});
@@ -18,7 +19,6 @@ class _AddHighlightPageState extends State<AddHighlightPage> {
   List<File> _selectedImages = [];
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
-  bool _isLoading = false;
 
   Future<void> _pickImages() async {
     try {
@@ -37,9 +37,10 @@ class _AddHighlightPageState extends State<AddHighlightPage> {
   }
 
   Future<List<String>> _uploadImages() async {
-    const cloudName = "duo2b46ro";
-    const uploadPreset = "travel_app_preset";
+    final cloudName = CloudinaryConfig.cloudinaryCloudName;
+    final uploadPreset = CloudinaryConfig.cloudinaryUploadPreset;
     List<String> urls = [];
+    
     for (var file in _selectedImages) {
       try {
         final uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/image/upload");
@@ -47,15 +48,16 @@ class _AddHighlightPageState extends State<AddHighlightPage> {
         request.fields['upload_preset'] = uploadPreset;
         request.files.add(await http.MultipartFile.fromPath('file', file.path));
         final response = await request.send();
+        
         if (response.statusCode == 200) {
           final bytes = await response.stream.toBytes();
           final json = jsonDecode(String.fromCharCodes(bytes));
           urls.add(json['secure_url']);
         } else {
-          throw Exception("Upload failed with status ${response.statusCode}");
+          throw Exception("Upload failed: ${response.statusCode}");
         }
       } catch (e) {
-        throw Exception("Error uploading image: $e");
+        throw Exception("Error uploading: $e");
       }
     }
     return urls;
@@ -64,51 +66,49 @@ class _AddHighlightPageState extends State<AddHighlightPage> {
   Future<void> _saveHighlight() async {
     if (_titleController.text.trim().isEmpty || _selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ກະລຸນາປ້ອນຊື່ ແລະ ເລືອກຮູບຢ່າງໜ້ອຍ 1 ຮູບ")),
+        const SnackBar(content: Text("ກະລຸນາປ້ອນຊື່ ແລະ ເເລືອກຮູບ")),
       );
       return;
     }
 
     setState(() => _isSaving = true);
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ກະລຸນາເຂົ້າສູ່ລະບົບ"), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
+    if (user == null) return;
+    
     try {
       final imageUrls = await _uploadImages();
-      final highlight = {
+      
+      final newHighlight = {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
         'title': _titleController.text.trim(),
         'coverImage': imageUrls.first,
         'images': imageUrls,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().toIso8601String(),
       };
 
       final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-      await userRef.update({
-        'highlights': FieldValue.arrayUnion([highlight])
-      });
+      
+      await userRef.set({
+        'highlights': FieldValue.arrayUnion([newHighlight])
+      }, SetOptions(merge: true));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("ເພີ່ມໄຮໄລທ໌ສຳເລັດ!"), backgroundColor: Colors.green),
-        );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("ການອັບໂຫຼດລົ້ມເຫຼວ: $e"), backgroundColor: Colors.red),
-        );
-      }
+      debugPrint("Error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
   }
 
   @override
@@ -120,19 +120,32 @@ class _AddHighlightPageState extends State<AddHighlightPage> {
         foregroundColor: Colors.white,
       ),
       body: _isSaving
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  CircularProgressIndicator(color: Colors.teal),
+                  SizedBox(height: 16),
+                  Text("ກຳລັງອັບໂຫຼດ... ກະລຸນາລໍຖ້າ"),
+                ],
+              ),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextField(
                     controller: _titleController,
-                    decoration: const InputDecoration(labelText: "ຊື່ໄຮໄລທ໌ (ຕົວຢ່າງ: ທ່ຽວປາກລາຍ)"),
+                    decoration: const InputDecoration(
+                      labelText: "ຊື່ໄຮໄລທ໌ (ຕົວຢ່າງ: ທ່ຽວປາກລາຍ)",
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text("ເລືອກຮູບພາບ (ສູງສຸດ 10 ຮູບ)"),
-                  const SizedBox(height: 8),
-                  Container(
+                  const SizedBox(height: 20),
+                  const Text("ເລືອກຮູບພາບ (ສູงສຸດ 10 ຮູບ)", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  SizedBox(
                     height: 120,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
@@ -144,8 +157,12 @@ class _AddHighlightPageState extends State<AddHighlightPage> {
                             child: Container(
                               width: 100,
                               margin: const EdgeInsets.only(right: 8),
-                              color: Colors.grey[200],
-                              child: const Icon(Icons.add_photo_alternate, size: 40),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey[400]!),
+                              ),
+                              child: const Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey),
                             ),
                           );
                         }
@@ -154,11 +171,14 @@ class _AddHighlightPageState extends State<AddHighlightPage> {
                             Container(
                               width: 100,
                               margin: const EdgeInsets.only(right: 8),
-                              child: Image.file(_selectedImages[i], fit: BoxFit.cover),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(_selectedImages[i], fit: BoxFit.cover),
+                              ),
                             ),
                             Positioned(
-                              top: 0,
-                              right: 8,
+                              top: 4,
+                              right: 12,
                               child: GestureDetector(
                                 onTap: () => setState(() => _selectedImages.removeAt(i)),
                                 child: const CircleAvatar(
@@ -173,15 +193,16 @@ class _AddHighlightPageState extends State<AddHighlightPage> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 30),
                   ElevatedButton(
                     onPressed: _saveHighlight,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal,
                       foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 48),
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text("ບັນທຶກໄຮໄລທ໌"),
+                    child: const Text("ບັນທຶກໄຮໄລທ໌", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
