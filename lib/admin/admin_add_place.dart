@@ -8,9 +8,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import '../routes/map_picker.dart';
 import '../models/place_model.dart';
+import '../models/api_Cloudinary.dart';
 
-// ── ตัวร่างข้อมูลของ "จุดย่อย" (Extra Place) ก่อนบันทึกลง Firestore ──
-// เก็บไฟล์รูปที่เลือกไว้ในเครื่อง (XFile) รอตอนบันทึกค่อยอัปโหลดขึ้น Cloudinary
 class _ExtraPlaceDraft {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descController = TextEditingController();
@@ -60,7 +59,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
 
   ll.LatLng? _pickedLocation;
 
-  // ── รายการ "จุดท่องเที่ยวย่อย" ที่ผู้ดูแลเพิ่มเข้ามา (ยังไม่ได้อัปโหลด) ──
   final List<_ExtraPlaceDraft> _extraDrafts = [];
 
   @override
@@ -115,7 +113,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
     }
   }
 
-  // ── เปิดหน้าต่างสำหรับเพิ่ม / แก้ไข "จุดท่องเที่ยวย่อย" หนึ่งจุด ──
   Future<void> _openExtraPlaceDialog({int? editIndex}) async {
     final draft = editIndex != null ? _extraDrafts[editIndex] : _ExtraPlaceDraft();
 
@@ -168,7 +165,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // ── รูปภาพของจุดย่อย ──
                     SizedBox(
                       height: 90,
                       child: ListView(
@@ -183,20 +179,16 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                                 children: [
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.file(File(img.path),
-                                        width: 80, height: 80, fit: BoxFit.cover),
+                                    child: Image.file(File(img.path), width: 80, height: 80, fit: BoxFit.cover),
                                   ),
                                   Positioned(
                                     top: 0,
                                     right: 0,
                                     child: GestureDetector(
-                                      onTap: () =>
-                                          setSheetState(() => draft.images.removeAt(i)),
+                                      onTap: () => setSheetState(() => draft.images.removeAt(i)),
                                       child: Container(
-                                        decoration: const BoxDecoration(
-                                            color: Colors.red, shape: BoxShape.circle),
-                                        child: const Icon(Icons.close,
-                                            color: Colors.white, size: 16),
+                                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                        child: const Icon(Icons.close, color: Colors.white, size: 16),
                                       ),
                                     ),
                                   ),
@@ -251,13 +243,11 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                           draft.location == null
                               ? 'ປັກໝຸດພິກັດຈຸດຍ່ອຍ'
                               : 'ພິກັດ: ${draft.location!.latitude.toStringAsFixed(5)}, ${draft.location!.longitude.toStringAsFixed(5)}',
-                          style: const TextStyle(
-                              color: Colors.teal, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
                         ),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Colors.teal, width: 1.5),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ),
@@ -269,8 +259,7 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.teal,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         onPressed: () {
                           if (draft.nameController.text.trim().isEmpty) {
@@ -287,8 +276,7 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                           }
                           Navigator.pop(context, true);
                         },
-                        child: const Text('ບັນທຶກຈຸດຍ່ອຍ',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        child: const Text('ບັນທຶກຈຸດຍ່ອຍ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
@@ -314,10 +302,9 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
     });
   }
 
-  // ── อัปโหลดรูปภาพหนึ่งไฟล์ขึ้น Cloudinary แล้วคืน secure_url ──
   Future<String> _uploadOneImage(XFile file) async {
-    const String cloudName = "duo2b46ro";
-    const String uploadPreset = "travel_app_preset";
+    const cloudName = CloudinaryConfig.cloudName;
+    const uploadPreset = CloudinaryConfig.cloudinaryUploadPreset;
     var uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/image/upload");
     var request = http.MultipartRequest("POST", uri);
     request.fields['upload_preset'] = uploadPreset;
@@ -355,14 +342,13 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
     List<String> uploadedImageUrls = [];
     String placeId = FirebaseFirestore.instance.collection('places').doc().id;
 
-    const String cloudName = "duo2b46ro";
-    const String uploadPreset = "travel_app_preset";
+    const cloudName = CloudinaryConfig.cloudName;
+    const uploadPreset = CloudinaryConfig.cloudinaryUploadPreset;
 
     try {
       for (int i = 0; i < _selectedImages.length; i++) {
         File file = File(_selectedImages[i].path);
-        var uri = Uri.parse(
-            "https://api.cloudinary.com/v1_1/$cloudName/image/upload");
+        var uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/image/upload");
         var request = http.MultipartRequest("POST", uri);
         request.fields['upload_preset'] = uploadPreset;
         request.files.add(await http.MultipartFile.fromPath('file', file.path));
@@ -378,7 +364,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
         }
       }
 
-      // ── อัปโหลดรูปของ "จุดท่องเที่ยวย่อย" แต่ละจุด แล้วประกอบเป็น ExtraPlace ──
       List<Map<String, dynamic>> extraPlacesData = [];
       for (final draft in _extraDrafts) {
         List<String> subUrls = [];
@@ -411,10 +396,7 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ບັນທຶກ ແລະ ອັບໂຫລດຮູບພາບສຳເລັດ!'),
-            backgroundColor: Colors.teal,
-          ),
+          const SnackBar(content: Text('ບັນທຶກ ແລະ ອັບໂຫລດຮູບພາບສຳເລັດ!'), backgroundColor: Colors.teal),
         );
         _nameController.clear();
         _descriptionController.clear();
@@ -447,8 +429,7 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ເພີ່ມສະຖານທີ່ໃໝ່ (Admin)',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('ເພີ່ມສະຖານທີ່ໃໝ່ (Admin)', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
@@ -461,16 +442,13 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                   const SizedBox(height: 16),
                   Text(
                     'ກຳລັງອັບໂຫລດ $_uploadProgress / ${_selectedImages.length} ຮູບ...',
-                    style: TextStyle(
-                        color: Colors.teal[700], fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.teal[700], fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: LinearProgressIndicator(
-                      value: _selectedImages.isEmpty
-                          ? 0
-                          : _uploadProgress / _selectedImages.length,
+                      value: _selectedImages.isEmpty ? 0 : _uploadProgress / _selectedImages.length,
                       color: Colors.teal,
                       backgroundColor: Colors.teal.shade100,
                     ),
@@ -486,11 +464,9 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── ส่วนเลือกรูปภาพ ──
                     const Text(
                       'ຮູບພາບສະຖານທີ່ (ສູງສຸດ 15 ຮູບ) *',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 10),
                     Container(
@@ -504,31 +480,23 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                           ? Center(
                               child: TextButton.icon(
                                 onPressed: _pickImages,
-                                icon: const Icon(Icons.add_a_photo,
-                                    size: 30, color: Colors.teal),
-                                label: const Text('ກົດເລືອກຮູບພາບ',
-                                    style: TextStyle(color: Colors.teal)),
+                                icon: const Icon(Icons.add_a_photo, size: 30, color: Colors.teal),
+                                label: const Text('ກົດເລືອກຮູບພາບ', style: TextStyle(color: Colors.teal)),
                               ),
                             )
                           : GridView.builder(
                               padding: const EdgeInsets.all(8),
                               scrollDirection: Axis.horizontal,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 1, mainAxisSpacing: 8),
-                              itemCount: _selectedImages.length +
-                                  (_selectedImages.length < 15 ? 1 : 0),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 1, mainAxisSpacing: 8),
+                              itemCount: _selectedImages.length + (_selectedImages.length < 15 ? 1 : 0),
                               itemBuilder: (context, index) {
                                 if (index == _selectedImages.length) {
                                   return GestureDetector(
                                     onTap: _pickImages,
                                     child: Container(
-                                      decoration: BoxDecoration(
-                                          color: Colors.teal[50],
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                      child: const Icon(Icons.add,
-                                          color: Colors.teal, size: 40),
+                                      decoration: BoxDecoration(color: Colors.teal[50], borderRadius: BorderRadius.circular(8)),
+                                      child: const Icon(Icons.add, color: Colors.teal, size: 40),
                                     ),
                                   );
                                 }
@@ -547,14 +515,10 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                                       top: 2,
                                       right: 2,
                                       child: GestureDetector(
-                                        onTap: () => setState(() =>
-                                            _selectedImages.removeAt(index)),
+                                        onTap: () => setState(() => _selectedImages.removeAt(index)),
                                         child: Container(
-                                          decoration: const BoxDecoration(
-                                              color: Colors.red,
-                                              shape: BoxShape.circle),
-                                          child: const Icon(Icons.close,
-                                              color: Colors.white, size: 18),
+                                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                          child: const Icon(Icons.close, color: Colors.white, size: 18),
                                         ),
                                       ),
                                     ),
@@ -570,7 +534,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                     ),
                     const Divider(height: 28),
 
-                    // ── ชื่อสถานที่ ──
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(
@@ -578,12 +541,10 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.title),
                       ),
-                      validator: (v) =>
-                          v!.isEmpty ? 'ກະລຸນາປ້ອນຊື່ສະຖານທີ່' : null,
+                      validator: (v) => v!.isEmpty ? 'ກະລຸນາປ້ອນຊື່ສະຖານທີ່' : null,
                     ),
                     const SizedBox(height: 16),
 
-                    // ── เลือกเมือง ──
                     DropdownButtonFormField<String>(
                       value: _selectedDistrict,
                       decoration: const InputDecoration(
@@ -592,16 +553,12 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                         prefixIcon: Icon(Icons.location_city),
                       ),
                       hint: const Text('ກະລຸນາເລືອກ ເມືອງ'),
-                      items: _districts
-                          .map(
-                              (d) => DropdownMenuItem(value: d, child: Text(d)))
-                          .toList(),
+                      items: _districts.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
                       onChanged: (v) => setState(() => _selectedDistrict = v),
                       validator: (v) => v == null ? 'ກະລຸນາເລືອກ ເມືອງ' : null,
                     ),
                     const SizedBox(height: 16),
 
-                    // ── รายละเอียด ──
                     TextFormField(
                       controller: _descriptionController,
                       maxLines: 3,
@@ -610,12 +567,10 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.description),
                       ),
-                      validator: (v) =>
-                          v!.isEmpty ? 'ກະລຸນາປ້ອນລາຍລະອຽດ' : null,
+                      validator: (v) => v!.isEmpty ? 'ກະລຸນາປ້ອນລາຍລະອຽດ' : null,
                     ),
                     const SizedBox(height: 20),
 
-                    // ── ปุ่มเปิด Map Picker ──
                     SizedBox(
                       width: double.infinity,
                       height: 46,
@@ -624,20 +579,16 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                         icon: const Icon(Icons.location_on, color: Colors.red),
                         label: const Text(
                           'ປັກໝຸດພິກັດຈາກແຜນທີ່',
-                          style: TextStyle(
-                              color: Colors.teal, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
                         ),
                         style: OutlinedButton.styleFrom(
-                          side:
-                              const BorderSide(color: Colors.teal, width: 1.5),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                          side: const BorderSide(color: Colors.teal, width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
 
-                    // ── แสดงพิกัดที่เลือก ──
                     Row(
                       children: [
                         Expanded(
@@ -649,8 +600,7 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.map),
                             ),
-                            validator: (v) =>
-                                v!.isEmpty ? 'ກະລຸນາເລືອກພິກັດ' : null,
+                            validator: (v) => v!.isEmpty ? 'ກະລຸນາເລືອກພິກັດ' : null,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -663,20 +613,17 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.map),
                             ),
-                            validator: (v) =>
-                                v!.isEmpty ? 'ກະລຸນາເລືອກພິກັດ' : null,
+                            validator: (v) => v!.isEmpty ? 'ກະລຸນາເລືອກພິກັດ' : null,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
 
-                    // ── Preview Map ──
                     if (_pickedLocation != null) ...[
                       const Text(
                         'ຕຳແໜ່ງທີ່ເລືອກໃນແຜນທີ່:',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       const SizedBox(height: 8),
                       ClipRRect(
@@ -687,14 +634,11 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                             options: MapOptions(
                               initialCenter: _pickedLocation!,
                               initialZoom: 14,
-                              interactionOptions: const InteractionOptions(
-                                flags: InteractiveFlag.none,
-                              ),
+                              interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
                             ),
                             children: [
                               TileLayer(
-                                urlTemplate:
-                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                 userAgentPackageName: 'com.example.abc_new',
                               ),
                               MarkerLayer(
@@ -703,8 +647,7 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                                     point: _pickedLocation!,
                                     width: 40,
                                     height: 40,
-                                    child: const Icon(Icons.location_pin,
-                                        color: Colors.red, size: 40),
+                                    child: const Icon(Icons.location_pin, color: Colors.red, size: 40),
                                   ),
                                 ],
                               ),
@@ -715,7 +658,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                       const SizedBox(height: 12),
                     ],
 
-                    // ── ส่วน "จุดท่องเที่ยวย่อย" (สามารถปักหมุด+แนบรูปได้เหมือนสถานที่หลัก) ──
                     const Divider(height: 28),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -734,8 +676,7 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                     if (_extraDrafts.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text('ຍັງບໍ່ມີຈຸດທ່ອງທ່ຽວຍ່ອຍ',
-                            style: TextStyle(color: Colors.grey, fontSize: 13)),
+                        child: Text('ຍັງບໍ່ມີຈຸດທ່ອງທ່ຽວຍ່ອຍ', style: TextStyle(color: Colors.grey, fontSize: 13)),
                       )
                     else
                       ListView.builder(
@@ -750,17 +691,10 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                               leading: draft.images.isNotEmpty
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
-                                      child: Image.file(
-                                        File(draft.images.first.path),
-                                        width: 48,
-                                        height: 48,
-                                        fit: BoxFit.cover,
-                                      ),
+                                      child: Image.file(File(draft.images.first.path), width: 48, height: 48, fit: BoxFit.cover),
                                     )
                                   : const Icon(Icons.image_not_supported, color: Colors.grey),
-                              title: Text(draft.nameController.text.isEmpty
-                                  ? '(ไม่มีชื่อ)'
-                                  : draft.nameController.text),
+                              title: Text(draft.nameController.text.isEmpty ? '(ไม่มีชื่อ)' : draft.nameController.text),
                               subtitle: Text(
                                 draft.location != null
                                     ? 'Lat: ${draft.location!.latitude.toStringAsFixed(5)}, Lng: ${draft.location!.longitude.toStringAsFixed(5)}'
@@ -772,8 +706,7 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.edit, color: Colors.teal, size: 20),
-                                    onPressed: () => _openExtraPlaceDialog(editIndex: index)
-                                        .then((_) => setState(() {})),
+                                    onPressed: () => _openExtraPlaceDialog(editIndex: index).then((_) => setState(() {})),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete, color: Colors.red, size: 20),
@@ -786,7 +719,6 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                         },
                       ),
 
-                    // ── ปุ่มบันทึก ──
                     const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
@@ -795,17 +727,12 @@ class _AdminAddPlacePageState extends State<AdminAddPlacePage> {
                         onPressed: _savePlace,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.teal,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        icon:
-                            const Icon(Icons.cloud_upload, color: Colors.white),
+                        icon: const Icon(Icons.cloud_upload, color: Colors.white),
                         label: const Text(
                           'ບັນທຶກ ແລະ ອັບໂຫລດຮູບພາບ',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold),
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),

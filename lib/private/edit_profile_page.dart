@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:http/http.dart' as http;
+import '../models/api_Cloudinary.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -70,9 +71,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       debugPrint('Load user data error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text("ໂຫຼດຂໍ້ມູນຜິດພາດ: $e"),
-              backgroundColor: Colors.red),
+          SnackBar(content: Text("ໂຫຼດຂໍ້ມູນຜິດພາດ: $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -82,17 +81,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<String?> _uploadImage(File imageFile) async {
     try {
-      const cloudName = "duo2b46ro";
-      const uploadPreset = "travel_app_preset"; 
-      final uri =
-          Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/image/upload");
+      const cloudName = CloudinaryConfig.cloudName;
+      const uploadPreset = CloudinaryConfig.cloudinaryUploadPreset;
+      final uri = Uri.parse("https://api.cloudinary.com/v1_1/$cloudName/image/upload");
       final request = http.MultipartRequest("POST", uri);
       request.fields['upload_preset'] = uploadPreset;
-      request.files
-          .add(await http.MultipartFile.fromPath('file', imageFile.path));
+      request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
-      final response =
-          await request.send().timeout(const Duration(seconds: 15));
+      final response = await request.send().timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final bytes = await response.stream.toBytes();
@@ -115,13 +111,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         title: Text(isProfile ? "ລຶບຮູບໂປຣໄຟລ໌?" : "ລຶບຮູບພື້ນຫຼັງ?"),
         content: const Text("ການລຶບນີ້ຈະມີຜົນທັນທີ ແລະ ບໍ່ສາມາດກູ້ຄືນໄດ້"),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text("ຍົກເລີກ")),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("ລຶບ", style: TextStyle(color: Colors.red)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ຍົກເລີກ")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("ລຶບ", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -152,17 +143,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
           }
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("ລຶບຮູບສຳເລັດ"), backgroundColor: Colors.green),
+          const SnackBar(content: Text("ລຶບຮູບສຳເລັດ"), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       debugPrint('🔴 _removeExistingPhoto error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text("ລຶບຮູບບໍ່ສຳເລັດ: $e"),
-              backgroundColor: Colors.red),
+          SnackBar(content: Text("ລຶບຮູບບໍ່ສຳເລັດ: $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -170,13 +158,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  // 💡 ปรับปรุงฟังก์ชันการทำงานตรงส่วนนี้ให้ส่งค่าเด้งกลับเข้าหน้าจอบันทึกทันที
   Future<void> _pickAndCropImage(bool isProfile) async {
     try {
       final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-      if (image == null) return; // ถ้าผู้ใช้กดยกเลิกการเลือกรูปภาพให้หยุดทำงาน
+      if (image == null) return;
 
-      // เรียกใช้งาน ImageCropper และตั้งค่าให้เด้งกลับเมื่อกดถูกต้อง
       final croppedFile = await ImageCropper().cropImage(
         sourcePath: image.path,
         aspectRatio: isProfile
@@ -188,7 +174,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             toolbarColor: Colors.teal,
             toolbarWidgetColor: Colors.white,
             initAspectRatio: CropAspectRatioPreset.original,
-            lockAspectRatio: false, // 💡 ปรับเป็น false ชั่วคราวเพื่อให้ UI บน Android ยอมปล่อยผลลัพธ์กลับหน้าเดิมได้สะดวกขึ้น
+            lockAspectRatio: false,
             hideBottomControls: false,
           ),
           IOSUiSettings(
@@ -199,11 +185,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ],
       );
 
-      // เมื่อได้ไฟล์ที่ผ่านการตัด (กดปุ่ม ✓) และ Widget ยังแสดงผลอยู่บนหน้าจอ
       if (croppedFile != null && mounted) {
         setState(() {
           if (isProfile) {
-            _tempPhotoPath = croppedFile.path; // บันทึกพาธรูปลงตัวแปรชั่วคราว
+            _tempPhotoPath = croppedFile.path;
           } else {
             _tempCoverPath = croppedFile.path;
           }
@@ -214,8 +199,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       debugPrint('🔴 Crop Image Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text("ເກີດຂໍ້ຜິດພາດໃນການຕັດຮູບ: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("ເກີດຂໍ້ຜິດພາດໃນການຕັດຮູບ: $e"), backgroundColor: Colors.red),
         );
       }
     }
@@ -227,9 +211,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     
     if (!formState.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("ກະລຸນາປ້ອນຊື່ສະແດງ"),
-            backgroundColor: Colors.orange),
+        const SnackBar(content: Text("ກະລຸນາປ້ອນຊື່ສະແດງ"), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -240,9 +222,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("ກະລຸນາເຂົ້າສູ່ລະບົບ"),
-              backgroundColor: Colors.red),
+          const SnackBar(content: Text("ກະລຸນາເຂົ້າສູ່ລະບົບ"), backgroundColor: Colors.red),
         );
       }
       return;
@@ -284,11 +264,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("ອັບເດດໂປຣໄຟລ໌ສຳເລັດ!"),
-              backgroundColor: Colors.green),
+          const SnackBar(content: Text("ອັບເດດໂປຣໄຟລ໌ສຳເລັດ!"), backgroundColor: Colors.green),
         );
-        Navigator.pop(context, true); // ปิดหน้าบันทึกเมื่อบันทึกข้อมูลสำเร็จ
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -316,8 +294,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   fit: BoxFit.contain,
                   width: MediaQuery.of(context).size.width * 0.9,
                   height: MediaQuery.of(context).size.height * 0.7,
-                  errorBuilder: (c, e, s) => const Icon(Icons.broken_image,
-                      color: Colors.white, size: 50),
+                  errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.white, size: 50),
                 ),
               ),
             ),
@@ -372,13 +349,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               width: double.infinity,
                               decoration: BoxDecoration(
                                 image: _tempCoverPath != null
-                                    ? DecorationImage(
-                                        image: FileImage(File(_tempCoverPath!)),
-                                        fit: BoxFit.cover)
+                                    ? DecorationImage(image: FileImage(File(_tempCoverPath!)), fit: BoxFit.cover)
                                     : (_coverUrl.isNotEmpty
-                                        ? DecorationImage(
-                                            image: NetworkImage(_coverUrl),
-                                            fit: BoxFit.cover)
+                                        ? DecorationImage(image: NetworkImage(_coverUrl), fit: BoxFit.cover)
                                         : null),
                                 color: Colors.grey[300],
                                 borderRadius: BorderRadius.circular(12),
@@ -395,8 +368,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                   onTap: () => setState(() => _tempCoverPath = null),
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(
-                                        color: Colors.red, shape: BoxShape.circle),
+                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                                     child: const Icon(Icons.close, color: Colors.white, size: 16),
                                   ),
                                 ),
@@ -406,8 +378,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               right: 8,
                               child: Container(
                                 padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                    color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+                                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
                                 child: Row(
                                   children: const [
                                     Icon(Icons.crop, color: Colors.white, size: 16),
@@ -425,8 +396,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                          color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+                                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
                                       child: const Row(
                                         children: [
                                           Icon(Icons.visibility, color: Colors.white, size: 14),
@@ -440,8 +410,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                       onTap: () => _removeExistingPhoto(false),
                                       child: Container(
                                         padding: const EdgeInsets.all(4),
-                                        decoration: const BoxDecoration(
-                                            color: Colors.red, shape: BoxShape.circle),
+                                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                                         child: const Icon(Icons.delete, color: Colors.white, size: 16),
                                       ),
                                     ),
@@ -481,8 +450,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                   onTap: () => setState(() => _tempPhotoPath = null),
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(
-                                        color: Colors.red, shape: BoxShape.circle),
+                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                                     child: const Icon(Icons.close, color: Colors.white, size: 16),
                                   ),
                                 ),
@@ -492,10 +460,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               right: 0,
                               child: Container(
                                 padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: Colors.teal,
-                                  shape: BoxShape.circle,
-                                ),
+                                decoration: const BoxDecoration(color: Colors.teal, shape: BoxShape.circle),
                                 child: const Icon(Icons.crop, color: Colors.white, size: 16),
                               ),
                             ),
@@ -507,8 +472,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                   onTap: () => _removeExistingPhoto(true),
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(
-                                        color: Colors.red, shape: BoxShape.circle),
+                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                                     child: const Icon(Icons.delete, color: Colors.white, size: 16),
                                   ),
                                 ),
@@ -521,7 +485,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       TextFormField(
                         controller: _displayNameController,
                         decoration: const InputDecoration(labelText: "ຊື່ສະແດງ *"),
-                        validator: (v) => v!.isEmpty ? "ກະລุนາປ້ອນຊື່" : null,
+                        validator: (v) => v!.isEmpty ? "ກະລຸນາປ້ອນຊື່" : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -538,11 +502,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           minimumSize: const Size(double.infinity, 48),
                         ),
                         child: _isSaving
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : const Text("ບັນທຶກ", style: TextStyle(fontSize: 16)),
                       ),
                     ],
