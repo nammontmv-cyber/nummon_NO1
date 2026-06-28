@@ -345,6 +345,8 @@ class _ShareTripPostSheetState extends State<ShareTripPostSheet> {
       await FirebaseFirestore.instance.collection('user_posts').add({
         'userId': user.uid, 'userName': userName, 'userAvatar': userAvatar, 'userBackground': userBackground,
         'placeName': widget.planData['placeName'] ?? '', 'title': _titleController.text.trim(), 'content': _contentController.text.trim(),
+        'latitude': widget.planData['latitude'] ?? 0.0,  
+        'longitude': widget.planData['longitude'] ?? 0.0, 
         'images': finalImageUrls, 'createdAt': FieldValue.serverTimestamp(), 'type': 'user_share', 'likes': 0, 'likedBy': [],
       });
 

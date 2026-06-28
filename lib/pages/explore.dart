@@ -462,8 +462,8 @@ class _UserPostCardState extends State<_UserPostCard> with AutomaticKeepAliveCli
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => MapPage(
-                                      latitude: latitude,
-                                      longitude: longitude,
+                                      latitude: latitude ?? 0.0,   
+                                      longitude: longitude ?? 0.0, 
                                       placeName: placeName,
                                     ),
                                   ),

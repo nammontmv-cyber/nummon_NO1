@@ -776,8 +776,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) => MapPage(
-                                          latitude: postLat,
-                                          longitude: postLng,
+                                          latitude: postLat ?? 0.0,
+                                          longitude: postLng ?? 0.0,
                                           placeName: placeName,
                                         ),
                                       ),

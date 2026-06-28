@@ -15,19 +15,40 @@ import 'story_preview_page.dart';
 import '../private/profile_page.dart';
 
 // ---------------------------------------------------------
-// ฟังก์ชันสกัดภาพกึ่งกลางเพื่อใช้เป็นภาพหน้าปก
+// ฟังก์ชันสกัดภาพกึ่งกลางเพื่อใช้เป็นภาพหน้าปก (เวอร์ชันปรับปรุงสมบูรณ์)
 // ---------------------------------------------------------
 String getMiddleFrameThumbnail(String url) {
   if (url.isEmpty) return url;
-  const marker = '/upload/';
-  final idx = url.indexOf(marker);
-  if (idx == -1) return url;
-
-  final insertPos = idx + marker.length;
+  
+  // 1. เปลี่ยนนามสกุลไฟล์ปลายทางให้เป็น .jpg เสมอเพื่อดึงรูปภาพหน้าปก
   String cleanUrl = url.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '.jpg');
-  return cleanUrl.substring(0, insertPos) +
-      'so_50p,f_auto,q_auto,vc_auto/' +
-      cleanUrl.substring(insertPos);
+  
+  const marker = '/upload/';
+  final idx = cleanUrl.indexOf(marker);
+  if (idx == -1) return cleanUrl;
+
+  final baseUrl = cleanUrl.substring(0, idx + marker.length);
+  final remaining = cleanUrl.substring(idx + marker.length);
+
+  // 2. ตรวจหาโครงสร้างเวอร์ชัน (เช่น v171950000/) เพื่อล้าง Transformation เก่าที่อาจติดมาตอนตัดคลิป
+  final versionRegex = RegExp(r'v\d+/');
+  final match = versionRegex.firstMatch(remaining);
+
+  if (match != null) {
+    // หากพบเวอร์ชัน ให้ตัดเอาคำสั่งเก่าข้างหน้าออกทั้งหมด เพื่อป้องกันคำสั่งซ้อนทับกัน
+    final afterVersion = remaining.substring(match.start);
+    return baseUrl + 'so_50p,f_auto,q_auto/' + afterVersion;
+  } else {
+    // หากไม่พบเวอร์ชัน ให้ทำการกรองเซกเมนต์คำสั่งวิดีโอเก่าออกด้วยวิธี Splitting
+    List<String> segments = remaining.split('/');
+    segments.removeWhere((seg) =>
+        seg.contains('so_') ||
+        seg.contains('eo_') ||
+        seg.contains('vc_') ||
+        seg.contains('f_') ||
+        seg.contains('q_'));
+    return baseUrl + 'so_50p,f_auto,q_auto/' + segments.join('/');
+  }
 }
 
 // ---------------------------------------------------------
@@ -599,7 +620,7 @@ class _StorySectionState extends State<StorySection> {
 }
 
 // ---------------------------------------------------------
-// Classes ສໍາລັບຈັດການ Viewer ຂອງ Story
+// Classes ສໍາລັບจัดทໍາ Viewer ຂອງ Story
 // ---------------------------------------------------------
 class UserStoryGroup {
   final String userId;
@@ -1198,7 +1219,7 @@ class _FacebookStoryViewerState extends State<FacebookStoryViewer> {
                           const Expanded(
                             child: Padding(
                               padding: EdgeInsets.only(left: 8.0),
-                              child: Text("ສົ່ງຄຳເຫັນ...",
+                              child: Text("ສົ່ງຄຳເหັນ...",
                                   style: TextStyle(color: Colors.white60, fontSize: 13)),
                             ),
                           ),
